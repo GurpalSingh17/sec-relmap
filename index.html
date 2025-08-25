@@ -10,6 +10,7 @@
 
 <style>
 :root{
+  /* PwC-ish palette */
   --bg:#FAF9F7; --card:#FFFFFF; --ink:#2D2D2C; --muted:#6B6F72; --line:#E5E1DC;
   --accent:#D04A02; --parent:#D04A02; --child:#00A3A1; --link:#C8C4BE;
 }
@@ -288,16 +289,22 @@ q.addEventListener('input', ()=>{
 });
 document.getElementById('expand').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = true; });
 document.getElementById('collapse').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = false; });
+</script>
 
-// ---------- Graph (Overview + Focus modes) ----------
+<script>
+/* ===== Graph (Overview + Focus w/ no-overlap rings + label culling) ===== */
 (function(){
   const canvas = document.getElementById('graph');
   const ctx = canvas.getContext('2d', { alpha:false });
   const tip = document.getElementById('tip');
 
+  // Offscreen context for measuring text widths
+  const measure = document.createElement('canvas').getContext('2d');
+  const baseFont = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+  measure.font = baseFont;
+
   let nodes = [], links = [];
   let mode = 'overview';         // 'overview' | 'focus'
-  let focusParent = null;        // parent label
   let scale=1, tx=0, ty=0;       // zoom/pan
   let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
 
@@ -307,44 +314,47 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   window.__graph_on_activate = () => { resize(); };
 
   window.__graph_reload = (data) => {
-    window.__DATA = data; // stash
+    window.__DATA = data; // stash full data
     mode = 'overview';
-    focusParent = null;
     buildOverview();
     fitScreen();
   };
 
-  // ---- Build datasets ----
+  // ---------- Data builders ----------
   function buildOverview(){
-    const parents = window.__DATA.nodes.filter(n=>n.group==='parent')
+    const parents = window.__DATA.nodes
+      .filter(n=>n.group==='parent')
       .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => ({...n, size: 6 + 8*Math.sqrt(n.count || 1)}));    // size by degree
+      .map(n => ({...n, size: 6 + 8*Math.sqrt(n.count || 1)}));   // size by degree
+
     nodes = parents;
     links = []; // no edges in overview
     layoutOverview();
   }
 
   function buildFocus(parentLabel){
-    focusParent = parentLabel;
     const p = window.__DATA.nodes.find(n => n.group==='parent' && n.label===parentLabel);
     if (!p){ buildOverview(); return; }
+
     const childrenIds = new Set(
       window.__DATA.links.filter(e => e.source===("P|"+parentLabel)).map(e=>e.target)
     );
     const kids = window.__DATA.nodes.filter(n => childrenIds.has(n.id));
+
     nodes = [{...p, size:12}, ...kids.map(k=>({...k, size:7}))];
     links = kids.map(k => ({ source:nodes[0], target:k, w:1 }));
-    layoutFocus();
+
+    layoutFocusNoOverlap();
   }
 
-  // ---- Layouts ----
-  function layout(){ mode==='overview' ? layoutOverview() : layoutFocus(); }
+  // ---------- Layouts ----------
+  function layout(){ mode==='overview' ? layoutOverview() : layoutFocusNoOverlap(); }
 
+  // Overview = tidy grid
   function layoutOverview(){
     const cw = canvas.width, ch = canvas.height, pad=60;
     const n = nodes.length;
     if (!n) return;
-    // grid size ≈ square
     const cols = Math.ceil(Math.sqrt(n));
     const rows = Math.ceil(n/cols);
     const cellW = (cw - pad*2) / cols;
@@ -357,31 +367,64 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     });
   }
 
-  function layoutFocus(){
+  // Focus = parent center; children packed on rings (no overlap, account for label width)
+  function layoutFocusNoOverlap(){
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const parent = nodes[0];
     parent.x = cx; parent.y = cy;
-    const kids = nodes.slice(1);
-    const m = kids.length;
-    if (!m) return;
 
-    // Split into 1–3 rings depending on size
-    const rings = (m<=30)?1: (m<=90?2:3);
-    let start=0;
-    for (let r=0;r<rings;r++){
-      const left = Math.ceil((m-start)/(rings-r));               // even split
-      const radius = 110 + r*80;
-      for (let i=0;i<left;i++){
-        const k = kids[start+i];
-        const ang = 2*Math.PI * (i/left);
-        k.x = cx + radius*Math.cos(ang);
-        k.y = cy + radius*Math.sin(ang);
+    const kids = nodes.slice(1);
+    if (!kids.length) return;
+
+    const startRadius = 120;   // first ring radius
+    const ringGap     = 90;    // distance between rings
+    const minSepPx    = 12;    // extra gap between neighbor labels
+    const labelPadPx  = 8;     // little padding inside label box
+
+    // px needed around node for label on a ring (screen px; convert to angle by /R)
+    function needPx(node){
+      const w = Math.max(2*(node.size||7), measure.measureText(node.label||'').width + labelPadPx);
+      return w + minSepPx;
+    }
+
+    let ringIndex = 0;
+    let angleUsed = 0;
+    let R = startRadius;
+    const TWO_PI = Math.PI*2;
+    const startAngle = Math.random() * TWO_PI;
+
+    // Place wider labels first so tighter packing later
+    const order = kids.slice().sort((a,b)=> needPx(b) - needPx(a));
+
+    angleUsed = 0; R = startRadius; ringIndex = 0;
+    for (const k of order){
+      let spanPx = needPx(k);
+      let ang = spanPx / R;
+
+      while (angleUsed + ang > TWO_PI && ringIndex < 100){
+        ringIndex++;
+        R = startRadius + ringIndex*ringGap;
+        angleUsed = 0;
+        ang = spanPx / R;
       }
-      start += left;
+      const placement = startAngle + angleUsed + ang/2;
+      k.x = cx + R*Math.cos(placement);
+      k.y = cy + R*Math.sin(placement);
+      angleUsed += ang;
+    }
+
+    // tiny jitter to decorrelate straight horizontal lines
+    for (let i=1;i<nodes.length;i++){
+      const n = nodes[i];
+      const dx=n.x-cx, dy=n.y-cy, r=Math.hypot(dx,dy);
+      const jitter = (Math.random()-0.5)*2.0; // ±1px
+      const t = Math.atan2(dy,dx);
+      n.x = cx + (r+jitter)*Math.cos(t);
+      n.y = cy + (r+jitter)*Math.sin(t);
     }
   }
 
-  // ---- zoom / pan ----
+  // ---------- zoom / pan ----------
   canvas.addEventListener('wheel', e=>{
     const m = e.deltaY>0 ? 0.9 : 1.1;
     const before = toGraph(e.offsetX, e.offsetY);
@@ -399,9 +442,8 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       dragging = hit; dragOffset=[gx-hit.x, gy-hit.y];
       showTip(hit, e.offsetX, e.offsetY);
       if (mode==='overview' && hit.group==='parent'){
-        mode='focus'; buildFocus(hit.label); fitScreen();
-        const sel = document.getElementById('parent-select');
-        sel.value = hit.label;
+        buildFocus(hit.label); mode='focus'; fitScreen();
+        const sel = document.getElementById('parent-select'); if (sel) sel.value = hit.label;
       }
     } else {
       panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip();
@@ -415,13 +457,14 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
   document.getElementById('reset-layout').addEventListener('click', ()=>{ layout(); });
   document.getElementById('fit').addEventListener('click', fitScreen);
-  document.getElementById('mode-overview').addEventListener('click', ()=>{ mode='overview'; buildOverview(); fitScreen(); });
+  document.getElementById('mode-overview').addEventListener('click', ()=>{ buildOverview(); mode='overview'; fitScreen(); });
   document.getElementById('mode-focus').addEventListener('click', ()=>{
     const val = document.getElementById('parent-select').value;
-    if (val){ mode='focus'; buildFocus(val); fitScreen(); }
+    if (val){ buildFocus(val); mode='focus'; fitScreen(); }
   });
-  document.getElementById('parent-select').addEventListener('change', e=>{
-    if (e.target.value){ mode='focus'; buildFocus(e.target.value); fitScreen(); }
+  const sel = document.getElementById('parent-select');
+  if (sel) sel.addEventListener('change', e=>{
+    if (e.target.value){ buildFocus(e.target.value); mode='focus'; fitScreen(); }
   });
 
   function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
@@ -429,7 +472,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); if (n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  // zoom-safe drawing (labels only when zoomed in)
+  // ---------- draw (with label culling in screen space) ----------
   function draw(){
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
     const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
@@ -437,9 +480,11 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const linkCol   = getComputedStyle(document.documentElement).getPropertyValue('--link').trim()   || '#C8C4BE';
 
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // world space (scaled) for edges and nodes
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // edges in focus mode only
+    // edges shown only in focus mode
     if (mode==='focus' && links.length){
       const minEdgePx = 0.8;
       ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
@@ -457,16 +502,61 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       ctx.fillStyle = (n.group==='parent' ? parentCol : childCol);
       ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
     }
+    ctx.restore();
 
-    // labels when zoomed in or small lists
-    const showLabels = scale > 0.7 || nodes.length < 150;
+    // ----- label culling in SCREEN space -----
+    const showLabels = scale > 0.5 || nodes.length < 180; // global toggle
     if (showLabels){
-      ctx.font='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-      ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
-      for (const n of nodes){ ctx.fillText(n.label, n.x, n.y + Math.max(n.size||7, minNodePx/scale) + 4); }
+      // Build candidate labels with screen boxes
+      measure.font = baseFont;
+      const fontHeight = 14; // px
+      const cands = nodes.map(n=>{
+        const r_world = Math.max(n.size||7, minNodePx/scale);
+        const y_world = n.y + r_world + 4;
+        const w_world = measure.measureText(n.label||'').width;
+        const w_screen = w_world * scale;
+        const h_screen = fontHeight * scale;
+        const sx = n.x*scale + tx;
+        const sy = y_world*scale + ty;
+        return {
+          n, sx, sy,
+          w: w_screen, h: h_screen,
+          y_world
+        };
+      });
+
+      // Priority: parents first, then higher degree/count, then shorter labels
+      cands.sort((a,b)=>{
+        const gp = (a.n.group==='parent') - (b.n.group==='parent');
+        if (gp) return -gp;
+        const d = (b.n.count||0) - (a.n.count||0);
+        if (d) return d;
+        return a.w - b.w;
+      });
+
+      // Greedy culling
+      const placed = [];
+      ctx.save();
+      ctx.font = baseFont;         // draw in screen space (no scale)
+      ctx.textAlign='center';
+      ctx.textBaseline='top';
+      ctx.fillStyle='#333';
+
+      for (const L of cands){
+        const x0 = L.sx - L.w/2, y0 = L.sy, x1 = x0 + L.w, y1 = y0 + L.h;
+        let overlaps = false;
+        for (const P of placed){
+          // inflate a bit (2px margin)
+          if (x0 < P.x1+2 && x1 > P.x0-2 && y0 < P.y1+2 && y1 > P.y0-2){ overlaps = true; break; }
+        }
+        if (!overlaps){
+          placed.push({x0,y0,x1,y1});
+          ctx.fillText(L.n.label, L.sx, L.sy);
+        }
+      }
+      ctx.restore();
     }
 
-    ctx.restore();
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
@@ -476,8 +566,8 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const minx=Math.min(...nodes.map(n=>n.x)), maxx=Math.max(...nodes.map(n=>n.x));
     const miny=Math.min(...nodes.map(n=>n.y)), maxy=Math.max(...nodes.map(n=>n.y));
-    const w=maxx-minx, h=maxy-miny;
-    const s = 0.9 * Math.min(cw/Math.max(w,1), ch/Math.max(h,1));
+    const w=Math.max(1, maxx-minx), h=Math.max(1, maxy-miny);
+    const s = 0.9 * Math.min(cw/w, ch/h);
     scale = isFinite(s) ? Math.min(Math.max(s, 0.1), 5) : 1;
     tx = cx - ((minx+maxx)/2)*scale;
     ty = cy - ((miny+maxy)/2)*scale;
