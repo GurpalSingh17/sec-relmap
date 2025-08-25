@@ -5,7 +5,7 @@
 <title>Relationship Map — SEC CSV Viewer</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
-<!-- PapaParse for robust CSV parsing -->
+<!-- PapaParse -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -308,13 +308,15 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   let scale=1, tx=0, ty=0;       // zoom/pan
   let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
 
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); layout(); });
 
   window.__graph_on_activate = () => { resize(); };
 
   window.__graph_reload = (data) => {
-    window.__DATA = data; // stash full data
+    window.__DATA = data;
     mode = 'overview';
     buildOverview();
     fitScreen();
@@ -322,13 +324,18 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
   // ---------- Data builders ----------
   function buildOverview(){
+    // LOG scale + clamp to avoid huge parent bubbles
     const parents = window.__DATA.nodes
       .filter(n=>n.group==='parent')
       .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => ({...n, size: 6 + 8*Math.sqrt(n.count || 1)}));   // size by degree
+      .map(n => {
+        const raw = 6 + 6*Math.log10((n.count||1)+1);
+        const radius = clamp(raw, 6, 18);
+        return { ...n, size: radius };
+      });
 
     nodes = parents;
-    links = []; // no edges in overview
+    links = [];
     layoutOverview();
   }
 
@@ -350,11 +357,9 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   // ---------- Layouts ----------
   function layout(){ mode==='overview' ? layoutOverview() : layoutFocusNoOverlap(); }
 
-  // Overview = tidy grid
   function layoutOverview(){
     const cw = canvas.width, ch = canvas.height, pad=60;
-    const n = nodes.length;
-    if (!n) return;
+    const n = nodes.length; if (!n) return;
     const cols = Math.ceil(Math.sqrt(n));
     const rows = Math.ceil(n/cols);
     const cellW = (cw - pad*2) / cols;
@@ -367,7 +372,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     });
   }
 
-  // Focus = parent center; children packed on rings (no overlap, account for label width)
+  // Focus = parent center; children packed on rings (no overlap)
   function layoutFocusNoOverlap(){
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const parent = nodes[0];
@@ -376,31 +381,24 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const kids = nodes.slice(1);
     if (!kids.length) return;
 
-    const startRadius = 120;   // first ring radius
-    const ringGap     = 90;    // distance between rings
-    const minSepPx    = 12;    // extra gap between neighbor labels
-    const labelPadPx  = 8;     // little padding inside label box
+    const startRadius = 120;
+    const ringGap     = 90;
+    const minSepPx    = 12;
+    const labelPadPx  = 8;
 
-    // px needed around node for label on a ring (screen px; convert to angle by /R)
     function needPx(node){
       const w = Math.max(2*(node.size||7), measure.measureText(node.label||'').width + labelPadPx);
       return w + minSepPx;
     }
 
-    let ringIndex = 0;
-    let angleUsed = 0;
-    let R = startRadius;
+    let ringIndex = 0, angleUsed = 0, R = startRadius;
     const TWO_PI = Math.PI*2;
     const startAngle = Math.random() * TWO_PI;
 
-    // Place wider labels first so tighter packing later
     const order = kids.slice().sort((a,b)=> needPx(b) - needPx(a));
-
-    angleUsed = 0; R = startRadius; ringIndex = 0;
     for (const k of order){
       let spanPx = needPx(k);
       let ang = spanPx / R;
-
       while (angleUsed + ang > TWO_PI && ringIndex < 100){
         ringIndex++;
         R = startRadius + ringIndex*ringGap;
@@ -413,11 +411,11 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       angleUsed += ang;
     }
 
-    // tiny jitter to decorrelate straight horizontal lines
+    // tiny jitter
     for (let i=1;i<nodes.length;i++){
       const n = nodes[i];
       const dx=n.x-cx, dy=n.y-cy, r=Math.hypot(dx,dy);
-      const jitter = (Math.random()-0.5)*2.0; // ±1px
+      const jitter = (Math.random()-0.5)*2.0;
       const t = Math.atan2(dy,dx);
       n.x = cx + (r+jitter)*Math.cos(t);
       n.y = cy + (r+jitter)*Math.sin(t);
@@ -472,7 +470,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); if (n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  // ---------- draw (with label culling in screen space) ----------
+  // ---------- draw (label culling) ----------
   function draw(){
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
     const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
@@ -481,10 +479,9 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // world space (scaled) for edges and nodes
+    // world space for edges + nodes
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // edges shown only in focus mode
     if (mode==='focus' && links.length){
       const minEdgePx = 0.8;
       ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
@@ -494,7 +491,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       ctx.stroke();
     }
 
-    // nodes
     const minNodePx = 2;
     for (const n of nodes){
       const r = Math.max(n.size||7, minNodePx/scale);
@@ -504,12 +500,14 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     }
     ctx.restore();
 
-    // ----- label culling in SCREEN space -----
-    const showLabels = scale > 0.5 || nodes.length < 180; // global toggle
+    // labels in screen space with culling
+    const showLabels = (mode==='focus')
+      ? (scale > 0.5 || nodes.length < 180)
+      : (scale > 1.4 || nodes.length < 60);
+
     if (showLabels){
-      // Build candidate labels with screen boxes
       measure.font = baseFont;
-      const fontHeight = 14; // px
+      const fontHeight = 14;
       const cands = nodes.map(n=>{
         const r_world = Math.max(n.size||7, minNodePx/scale);
         const y_world = n.y + r_world + 4;
@@ -518,14 +516,10 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
         const h_screen = fontHeight * scale;
         const sx = n.x*scale + tx;
         const sy = y_world*scale + ty;
-        return {
-          n, sx, sy,
-          w: w_screen, h: h_screen,
-          y_world
-        };
+        return { n, sx, sy, w:w_screen, h:h_screen };
       });
 
-      // Priority: parents first, then higher degree/count, then shorter labels
+      // priority: parents, high degree, shorter labels
       cands.sort((a,b)=>{
         const gp = (a.n.group==='parent') - (b.n.group==='parent');
         if (gp) return -gp;
@@ -534,10 +528,9 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
         return a.w - b.w;
       });
 
-      // Greedy culling
       const placed = [];
       ctx.save();
-      ctx.font = baseFont;         // draw in screen space (no scale)
+      ctx.font = baseFont;
       ctx.textAlign='center';
       ctx.textBaseline='top';
       ctx.fillStyle='#333';
@@ -546,7 +539,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
         const x0 = L.sx - L.w/2, y0 = L.sy, x1 = x0 + L.w, y1 = y0 + L.h;
         let overlaps = false;
         for (const P of placed){
-          // inflate a bit (2px margin)
           if (x0 < P.x1+2 && x1 > P.x0-2 && y0 < P.y1+2 && y1 > P.y0-2){ overlaps = true; break; }
         }
         if (!overlaps){
