@@ -9,26 +9,17 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-/* ===== PwC-like palette (light UI) ===== */
 :root{
-  --bg:#FAF9F7;           /* warm off-white */
-  --card:#FFFFFF;         /* cards */
-  --ink:#2D2D2C;          /* charcoal text */
-  --muted:#6B6F72;        /* muted text */
-  --line:#E5E1DC;         /* borders */
-  --accent:#D04A02;       /* PwC orange */
-  --parent:#D04A02;       /* parent node */
-  --child:#00A3A1;        /* teal */
-  --link:#C8C4BE;         /* graph edges */
+  --bg:#FAF9F7; --card:#FFFFFF; --ink:#2D2D2C; --muted:#6B6F72; --line:#E5E1DC;
+  --accent:#D04A02; --parent:#D04A02; --child:#00A3A1; --link:#C8C4BE;
 }
-
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:blur(6px);z-index:3}
 h1{margin:0 0 6px;font-size:20px}
 .small{color:var(--muted);font-size:13px}
 .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center}
-button, .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button,.pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 button:hover{border-color:var(--accent)}
 input[type="file"]{display:none}
 label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--line);background:#fff;cursor:pointer}
@@ -65,19 +56,18 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 .dot.parent{background:var(--parent)}
 .dot.child{background:var(--child)}
 .tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
+#graph-controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <header>
   <h1>Relationship Map</h1>
-  <div class="small">
-    Parents: <span id="stat-parents">0</span> · Links: <span id="stat-links">0</span>
-  </div>
+  <div class="small">Parents: <span id="stat-parents">0</span> · Links: <span id="stat-links">0</span></div>
 
   <div class="row">
     <label for="file">Choose CSV</label><input id="file" type="file" accept=".csv,text/csv"/>
     <div id="drop">…or drop CSV here</div>
-    <span class="help">Expected headers: <code>Parent Entity Name</code>, <code>Child Entity</code> (or <code>Issuer Name</code>), plus optional columns.</span>
+    <span class="help">Expected headers: <code>Parent Entity Name</code>, <code>Child Entity</code> (or <code>Issuer Name</code>)</span>
   </div>
 
   <div class="tabs">
@@ -89,6 +79,12 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <button id="expand">Expand all</button>
     <button id="collapse">Collapse all</button>
     <span class="help">No data leaves your browser.</span>
+  </div>
+
+  <div id="graph-controls" class="controls" style="display:none">
+    <button id="reset-layout">Reset layout</button>
+    <button id="fit">Fit to screen</button>
+    <span class="help">Static clustered layout (no physics). Drag nodes, zoom with wheel.</span>
   </div>
 </header>
 
@@ -116,8 +112,10 @@ tabs.forEach(t => t.addEventListener('click', () => {
   t.classList.add('active');
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelector(t.dataset.target).classList.add('active');
+
   const onGraph = (t.dataset.target==="#view-graph");
   document.getElementById('list-controls').style.display = onGraph ? "none" : "flex";
+  document.getElementById('graph-controls').style.display = onGraph ? "flex" : "none";
   if (onGraph && window.__graph_on_activate) window.__graph_on_activate();
 }));
 
@@ -143,21 +141,13 @@ function loadFile(file){
 }
 
 // ----- Data handling -----
-let CURRENT = null; // {groups, nodes, links}
+let CURRENT = null;
 
 function pickCol(cols, ...cands){
   const lc = {}; cols.forEach(c => lc[(c||'').toLowerCase()] = c);
-  for (const c of cands){
-    if (!c) continue;
-    const k = c.toLowerCase();
-    if (lc[k]) return lc[k];
-  }
-  // try fuzzy: remove spaces and lowercase
+  for (const c of cands){ if (lc[c?.toLowerCase()]) return lc[c.toLowerCase()]; }
   const compact = {}; cols.forEach(c => compact[(c||'').toLowerCase().replace(/\s+/g,'')] = c);
-  for (const c of cands){
-    const k = (c||'').toLowerCase().replace(/\s+/g,'');
-    if (compact[k]) return compact[k];
-  }
+  for (const c of cands){ const k=(c||'').toLowerCase().replace(/\s+/g,''); if (compact[k]) return compact[k]; }
   return null;
 }
 
@@ -177,7 +167,7 @@ function handleData(headers, rows){
     alert("Missing required headers. Need at least 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name').");
     return;
   }
-  // build groups for list
+
   const byParent = new Map();
   for (const r of rows){
     const p = (r[col_parent_name]||"").trim();
@@ -201,23 +191,17 @@ function handleData(headers, rows){
     .map(g => ({...g, count:g.children.length, children:g.children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))}))
     .sort((a,b)=> b.count - a.count || a.parent.localeCompare(b.parent));
 
-  // stats
   document.getElementById('stat-parents').textContent = groups.length;
   document.getElementById('stat-links').textContent = rows.length;
 
-  // render list
   const listSec = document.getElementById('view-list');
-  listSec.innerHTML = groups.map(g => renderGroup(g)).join('');
-
-  // search/expand helpers
+  listSec.innerHTML = groups.map(renderGroup).join('');
   window.cards = Array.from(document.querySelectorAll('.card'));
-  const q = document.getElementById('q');
-  q.value = '';
-  q.dispatchEvent(new Event('input'));
+  const q = document.getElementById('q'); q.value=''; q.dispatchEvent(new Event('input'));
 
-  // build graph data
+  // Build graph data (parents, children, edges)
   const nodes = {};
-  const linksMap = new Map(); // key "p||c" -> count
+  const linksMap = new Map();
   function nk(kind, name){ return kind + "|" + (name||"").trim(); }
 
   for (const g of groups){
@@ -289,114 +273,143 @@ q.addEventListener('input', ()=>{
 document.getElementById('expand').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = true; });
 document.getElementById('collapse').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = false; });
 
-// ----- Graph (Canvas + small force layout) -----
+// ----- Graph: static clustered layout (Canvas) -----
 (function(){
   const canvas = document.getElementById('graph');
   const ctx = canvas.getContext('2d', { alpha:false });
   const tip = document.getElementById('tip');
 
-  function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
-
   let nodes = [], links = [];
-  function scatter(){
-    for (const n of nodes){
-      n.x = (Math.random()*0.6+0.2)*canvas.width;
-      n.y = (Math.random()*0.6+0.2)*canvas.height;
-      n.vx = n.vy = 0;
-    }
-  }
+  let scale=1, tx=0, ty=0;   // zoom/pan
+  let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
 
-  // expose activator called when Graph tab becomes visible
-  window.__graph_on_activate = () => { resize(); if (canvas.width>10 && canvas.height>10) scatter(); };
+  function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+  window.addEventListener('resize', ()=>{ resize(); if (nodes.length) layoutStatic(); });
 
-  // expose reloader when new CSV arrives
+  // Expose activator for Graph tab
+  window.__graph_on_activate = () => { resize(); };
+
+  // Reload with new data
   window.__graph_reload = (data) => {
     resize();
     nodes = data.nodes.map(n => ({...n, x:0,y:0,vx:0,vy:0,fx:null,fy:null,size:(n.group==='parent'?9:7)}));
     const idMap = Object.fromEntries(nodes.map(n=>[n.id,n]));
-    links = data.links.map(l => ({ source:idMap[l.source], target:idMap[l.target], w:1+Math.min(3,(l.count||1)-1) }));
-    scatter();
+    links = data.links.map(l => ({ source:idMap[l.source], target:idMap[l.target], w:(l.count||1) }));
+    layoutStatic();
+    fitScreen();
   };
 
-  // zoom/pan
-  let scale=1, tx=0, ty=0, dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
-  canvas.addEventListener('wheel', e=>{
-    const m = e.deltaY>0 ? 0.9 : 1.1;
-    const mx = (e.offsetX - tx)/scale, my = (e.offsetY - ty)/scale;
-    scale *= m; tx = e.offsetX - mx*scale; ty = e.offsetY - my*scale; e.preventDefault();
-  }, {passive:false});
-  canvas.addEventListener('mousedown', e=>{
-    const [gx,gy] = toGraph(e.offsetX, e.offsetY);
-    const hit = pick(gx,gy);
-    if (hit){ dragging = hit; dragOffset=[gx-hit.x, gy-hit.y]; hit.fx=hit.x; hit.fy=hit.y; showTip(hit, e.offsetX, e.offsetY); }
-    else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
-  });
-  window.addEventListener('mousemove', e=>{
-    if (dragging){ const [gx,gy] = toGraph(e.offsetX, e.offsetY); dragging.fx=gx-dragOffset[0]; dragging.fy=gy-dragOffset[1]; showTip(dragging, e.offsetX, e.offsetY); }
-    else if (panning){ tx = panOrig[0] + (e.offsetX - panStart[0]); ty = panOrig[1] + (e.offsetY - panStart[1]); }
-  });
-  window.addEventListener('mouseup', ()=>{ if (dragging){ dragging.fx=null; dragging.fy=null; } dragging=null; panning=false; });
+  // ----- static deterministic layout -----
+  function layoutStatic(){
+    if (!nodes.length) return;
+    const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
+    const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=>a.label.localeCompare(b.label));
+    const pR = 0.38 * Math.min(cw,ch);                          // parent ring radius
+    const parentIndex = new Map(parents.map((p,i)=>[p.id,i]));
+    parents.forEach((p,i)=>{
+      const ang = 2*Math.PI * (i/parents.length);
+      p.x = cx + pR * Math.cos(ang);
+      p.y = cy + pR * Math.sin(ang);
+    });
 
-  function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
-  function pick(x,y){ for (let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; const dx=x-n.x, dy=y-n.y; const r=(n.size+4); if (dx*dx+dy*dy<=r*r) return n; } return null; }
-  function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
-  function hideTip(){ tip.style.display='none'; }
-
-  // physics
-  const CENTER=0.02, LINK_K=0.03, LINK_LEN=90, REPULSION=1200, FRICTION=0.86;
-
-  function step(){
-    for (const e of links){
-      const dx=e.target.x-e.source.x, dy=e.target.y-e.source.y;
-      const d=Math.sqrt(dx*dx+dy*dy)||0.001, force=LINK_K*(d-LINK_LEN);
-      const fx=force*dx/d, fy=force*dy/d;
-      e.source.vx += fx; e.source.vy += fy;
-      e.target.vx -= fx; e.target.vy -= fy;
-    }
-    for (let i=0;i<nodes.length;i++){
-      for (let j=i+1;j<nodes.length;j++){
-        const a=nodes[i], b=nodes[j];
-        const dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy+1e-6;
-        const f=REPULSION/d2, fx=f*dx, fy=f*dy;
-        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
-      }
-    }
-    const cx=canvas.width/2, cy=canvas.height/2;
-    for (const n of nodes){
-      n.vx += (cx-n.x)*CENTER; n.vy += (cy-n.y)*CENTER;
-      n.vx *= FRICTION; n.vy *= FRICTION;
-      n.x += (n.fx!=null ? (n.fx-n.x)*0.6 : n.vx);
-      n.y += (n.fy!=null ? (n.fy-n.y)*0.6 : n.vy);
+    // children grouped under each parent
+    const childrenByParent = new Map(parents.map(p=>[p.id,[]]));
+    for (const e of links) if (e.source.group==='parent') childrenByParent.get(e.source.id)?.push(e.target);
+    for (const [pid, kids] of childrenByParent.entries()){
+      // dedupe
+      const uniq = Array.from(new Map(kids.map(k=>[k.id,k])).values());
+      const baseR = Math.max(60, 28 + 2*uniq.length);           // child ring radius per cluster
+      uniq.forEach((c,idx)=>{
+        const ang = 2*Math.PI * (idx/uniq.length);
+        const parent = nodes.find(n=>n.id===pid);
+        c.x = parent.x + baseR * Math.cos(ang);
+        c.y = parent.y + baseR * Math.sin(ang);
+      });
     }
   }
 
+  // ----- zoom / pan -----
+  canvas.addEventListener('wheel', e=>{
+    const m = e.deltaY>0 ? 0.9 : 1.1;
+    const before = toGraph(e.offsetX, e.offsetY);
+    scale *= m;
+    const after = toGraph(e.offsetX, e.offsetY);
+    tx += (after[0]-before[0])*scale;
+    ty += (after[1]-before[1])*scale;
+    e.preventDefault();
+  }, {passive:false});
+
+  canvas.addEventListener('mousedown', e=>{
+    const [gx,gy] = toGraph(e.offsetX, e.offsetY);
+    const hit = pick(gx,gy);
+    if (hit){ dragging = hit; dragOffset=[gx-hit.x, gy-hit.y]; showTip(hit, e.offsetX, e.offsetY); }
+    else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
+  });
+  window.addEventListener('mousemove', e=>{
+    if (dragging){ const [gx,gy] = toGraph(e.offsetX, e.offsetY); dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; showTip(dragging, e.offsetX, e.offsetY); }
+    else if (panning){ tx = panOrig[0] + (e.offsetX - panStart[0]); ty = panOrig[1] + (e.offsetY - panStart[1]); }
+  });
+  window.addEventListener('mouseup', ()=>{ dragging=null; panning=false; });
+
+  document.getElementById('reset-layout').addEventListener('click', ()=>{ layoutStatic(); draw(); });
+  document.getElementById('fit').addEventListener('click', fitScreen);
+
+  function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
+  function pick(x,y){ for (let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; const dx=x-n.x, dy=y-n.y; const r=(n.size+6); if (dx*dx+dy*dy<=r*r) return n; } return null; }
+  function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
+  function hideTip(){ tip.style.display='none'; }
+
+  // Keep things visible when zoomed far out
   function draw(){
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
+    const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
+    const childCol  = getComputedStyle(document.documentElement).getPropertyValue('--child').trim()  || '#00A3A1';
+    const linkCol   = getComputedStyle(document.documentElement).getPropertyValue('--link').trim()   || '#C8C4BE';
+
+    // clear
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // links
-    ctx.lineWidth=1; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--link').trim() || '#C8C4BE';
-    ctx.beginPath(); for (const e of links){ ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y); } ctx.stroke();
+    // edges: guarantee at least ~0.8px on screen
+    const minEdgePx = 0.8;
+    ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
+    ctx.strokeStyle = linkCol;
+    ctx.beginPath();
+    for (const e of links){ ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y); }
+    ctx.stroke();
 
-    // nodes
-    const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
-    const childCol  = getComputedStyle(document.documentElement).getPropertyValue('--child').trim()  || '#00A3A1';
+    // nodes: guarantee at least ~2px radius on screen
+    const minNodePx = 2;
     for (const n of nodes){
+      const r = Math.max(n.size, minNodePx/scale);
       ctx.beginPath();
       ctx.fillStyle = (n.group==='parent' ? parentCol : childCol);
-      ctx.arc(n.x,n.y,n.size,0,Math.PI*2); ctx.fill();
+      ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
     }
 
     // labels
     ctx.font='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
     ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
-    for (const n of nodes){ ctx.fillText(n.label, n.x, n.y + n.size + 4); }
-    ctx.restore();
-  }
+    for (const n of nodes){
+      if (scale > 0.25) ctx.fillText(n.label, n.x, n.y + Math.max(n.size, minNodePx/scale) + 4);
+    }
 
-  function tick(){ step(); draw(); requestAnimationFrame(tick); }
-  tick();
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  function fitScreen(){
+    // simple fit: center and set scale so parent ring fits
+    const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
+    const minx=Math.min(...nodes.map(n=>n.x)), maxx=Math.max(...nodes.map(n=>n.x));
+    const miny=Math.min(...nodes.map(n=>n.y)), maxy=Math.max(...nodes.map(n=>n.y));
+    const w=maxx-minx, h=maxy-miny;
+    const s = 0.9 * Math.min(cw/w, ch/h);
+    scale = isFinite(s) ? Math.min(Math.max(s, 0.1), 5) : 1;
+    tx = cx - ((minx+maxx)/2)*scale;
+    ty = cy - ((miny+maxy)/2)*scale;
+  }
 })();
 </script>
 </body>
