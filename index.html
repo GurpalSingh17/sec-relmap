@@ -5,7 +5,7 @@
 <title>Relationship Map — SEC CSV Viewer</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
-<!-- Libraries -->
+<!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 
@@ -27,14 +27,12 @@ input[type="file"]{display:none}
 label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--line);background:#fff;cursor:pointer}
 #drop{border:1px dashed var(--line);border-radius:12px;background:#fff;padding:10px 12px}
 .help{color:var(--muted);font-size:12px}
-
 .tabs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .tab{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 .tab.active{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent)}
 .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
 input[type="search"]{flex:1;min-width:260px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
 select{padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
-
 .view{display:none}
 .view.active{display:block}
 .section{padding:18px}
@@ -51,14 +49,11 @@ th{text-align:left;color:#474B4E;position:sticky;top:118px;background:var(--card
 td.src a{color:#0B6DAA;text-decoration:none}
 .hidden{display:none !important}
 footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
-
-/* Graph view */
 #graph-wrap{height:calc(100vh - 260px);position:relative;border-top:1px solid var(--line);margin-top:10px}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.dot.parent{background:var(--parent)}
-.dot.child{background:var(--child)}
+.dot.parent{background:var(--parent)} .dot.child{background:var(--child)}
 .tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
 #graph-controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
 .mode-pill{border-color:var(--accent)}
@@ -80,7 +75,6 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <button class="tab" data-target="#view-graph">Graph view</button>
   </div>
 
-  <!-- List controls -->
   <div class="controls" id="list-controls">
     <input id="q" type="search" placeholder="Search parent name…"/>
     <button id="expand">Expand all</button>
@@ -88,7 +82,6 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <span class="help">No data leaves your browser.</span>
   </div>
 
-  <!-- Graph controls -->
   <div id="graph-controls" class="controls" style="display:none">
     <span class="pill mode-pill">Mode:</span>
     <button id="mode-overview" class="pill">Overview</button>
@@ -96,9 +89,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <button id="mode-network" class="pill">Network (clustered)</button>
 
     <label class="pill">Top parents
-      <select id="net-count">
-        <option>20</option><option selected>50</option><option>100</option><option>200</option>
-      </select>
+      <select id="net-count"><option>20</option><option selected>50</option><option>100</option><option>200</option></select>
     </label>
 
     <label class="pill">Layout
@@ -113,9 +104,9 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
       <input id="net-spacing" type="range" min="0.8" max="3.0" step="0.1" value="1.6">
     </label>
 
-    <!-- NEW: parent size slider -->
-    <label class="pill">Parent size
-      <input id="parent-size" type="range" min="0" max="12" step="0.5" value="6">
+    <!-- NEW: controls max parent radius -->
+    <label class="pill">Parent size (max)
+      <input id="parent-size" type="range" min="12" max="48" step="1" value="28">
     </label>
 
     <select id="parent-select" title="Choose parent (Focus mode)"></select>
@@ -144,7 +135,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 <script>
 document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
 
-// ---------- Tabs ----------
+/* ---------- tabs ---------- */
 const tabs = document.querySelectorAll('.tab');
 tabs.forEach(t => t.addEventListener('click', () => {
   tabs.forEach(x => x.classList.remove('active'));
@@ -158,7 +149,7 @@ tabs.forEach(t => t.addEventListener('click', () => {
   if (onGraph && window.__graph_on_activate) window.__graph_on_activate();
 }));
 
-// ---------- CSV ingest ----------
+/* ---------- CSV ingest ---------- */
 const fileInput = document.getElementById('file');
 const drop = document.getElementById('drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor='var(--accent)'; });
@@ -171,17 +162,14 @@ fileInput.addEventListener('change', e => { const f = e.target.files[0]; if (f) 
 
 function loadFile(file){
   Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: h => (h||"").trim(),
+    header: true, skipEmptyLines: true, transformHeader: h => (h||"").trim(),
     complete: (res) => handleData(res.meta.fields, res.data),
     error: (err) => alert("CSV parse error: " + err)
   });
 }
 
-// ---------- Data prep ----------
+/* ---------- data prep ---------- */
 let CURRENT = null;
-
 function pickCol(cols, ...cands){
   const lc = {}; cols.forEach(c => lc[(c||'').toLowerCase()] = c);
   for (const c of cands){ if (lc[c?.toLowerCase()]) return lc[c.toLowerCase()]; }
@@ -201,11 +189,7 @@ function handleData(headers, rows){
   const col_date        = pickCol(headers,"Filing Date","signatureDate");
   const col_clar        = pickCol(headers,"Clarification","relationshipClarification");
   const col_source      = pickCol(headers,"Source File");
-
-  if (!col_parent_name || !col_child){
-    alert("Missing required headers. Need at least 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name').");
-    return;
-  }
+  if (!col_parent_name || !col_child){ alert("Missing headers. Need 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name')."); return; }
 
   const byParent = new Map();
   for (const r of rows){
@@ -213,16 +197,15 @@ function handleData(headers, rows){
     const c = (r[col_child]||"").trim();
     if (!p || !c) continue;
     const rec = {
-      child     : c,
-      child_cik : (r[col_child_cik]||"").trim(),
-      etype     : (r[col_entity_type]||"").trim(),
-      industry  : (r[col_industry]||"").trim(),
-      juris     : (r[col_juris]||"").trim(),
-      date      : (r[col_date]||"").trim(),
-      clar      : (r[col_clar]||"").trim(),
-      src       : (r[col_source]||"").trim()
+      child:c, child_cik:(r[col_child_cik]||"").trim(),
+      etype:(r[col_entity_type]||"").trim(),
+      industry:(r[col_industry]||"").trim(),
+      juris:(r[col_juris]||"").trim(),
+      date:(r[col_date]||"").trim(),
+      clar:(r[col_clar]||"").trim(),
+      src:(r[col_source]||"").trim()
     };
-    if (!byParent.has(p)) byParent.set(p, { parent:p, parent_cik:(r[col_parent_cik]||"").trim(), children:[] });
+    if (!byParent.has(p)) byParent.set(p,{parent:p,parent_cik:(r[col_parent_cik]||"").trim(),children:[]});
     byParent.get(p).children.push(rec);
   }
 
@@ -233,15 +216,15 @@ function handleData(headers, rows){
   document.getElementById('stat-parents').textContent = groups.length;
   document.getElementById('stat-links').textContent = rows.length;
 
-  // List rendering
+  // list render
   document.getElementById('view-list').innerHTML = groups.map(renderGroup).join('');
   window.cards = Array.from(document.querySelectorAll('.card'));
   const q = document.getElementById('q'); q.value=''; q.dispatchEvent(new Event('input'));
 
-  // Graph data
+  // graph data
   const nodes = {};
   const linksMap = new Map();
-  function nk(kind, name){ return kind + "|" + (name||"").trim(); }
+  const nk = (kind,name)=> kind + "|" + (name||"").trim();
 
   for (const g of groups){
     const pk = nk("P", g.parent);
@@ -258,7 +241,7 @@ function handleData(headers, rows){
 
   CURRENT = { groups, nodes:Object.values(nodes), links };
 
-  // Populate parent select
+  // parent dropdown (focus)
   const sel = document.getElementById('parent-select');
   sel.innerHTML = `<option value="">— choose parent —</option>` + groups.map(g => `<option>${escapeHtml(g.parent)}</option>`).join('');
 
@@ -269,14 +252,10 @@ function escapeHtml(s){return (s||"").replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'
 function renderRow(r){
   const link = r.src ? `<a href="${escapeHtml(r.src)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.src)}</a>` : "";
   return `<tr>
-    <td>${escapeHtml(r.child)}</td>
-    <td>${escapeHtml(r.child_cik)}</td>
-    <td>${escapeHtml(r.date)}</td>
-    <td>${escapeHtml(r.juris)}</td>
-    <td>${escapeHtml(r.etype)}</td>
-    <td>${escapeHtml(r.industry)}</td>
-    <td>${escapeHtml(r.clar)}</td>
-    <td class="src">${link}</td>
+    <td>${escapeHtml(r.child)}</td><td>${escapeHtml(r.child_cik)}</td>
+    <td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.juris)}</td>
+    <td>${escapeHtml(r.etype)}</td><td>${escapeHtml(r.industry)}</td>
+    <td>${escapeHtml(r.clar)}</td><td class="src">${link}</td>
   </tr>`;
 }
 function renderGroup(g){
@@ -298,8 +277,6 @@ function renderGroup(g){
   </div>
 </details>`;
 }
-
-// List search/expand
 const q = document.getElementById('q');
 q.addEventListener('input', ()=>{
   const term = (q.value||'').trim().toUpperCase();
@@ -317,426 +294,255 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 </script>
 
 <script>
-/* ===== Graph (Overview + Focus + Network clustered via d3-force) ===== */
+/* ===== Graph (Overview + Focus + Network) ===== */
 (function(){
   const canvas = document.getElementById('graph');
   const ctx = canvas.getContext('2d', { alpha:false });
   const tip = document.getElementById('tip');
 
-  // Offscreen context for measuring text widths
   const measure = document.createElement('canvas').getContext('2d');
   const baseFont = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
   measure.font = baseFont;
 
-  let nodes = [], links = [];
-  let mode = 'overview';         // 'overview' | 'focus' | 'network'
-  let scale=1, tx=0, ty=0;       // zoom/pan
-  let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
-
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
+  let nodes=[], links=[], mode='overview', scale=1, tx=0, ty=0, dragging=null, panning=false, dragOffset=[0,0], panStart=[0,0], panOrig=[0,0];
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); layout(); });
-  window.__graph_on_activate = () => { resize(); };
+  window.__graph_on_activate=()=>{ resize(); };
 
-  window.__graph_reload = (data) => {
-    window.__DATA = data;
-    mode = 'overview';
-    buildOverview();
-    fitScreen();
-  };
+  window.__graph_reload = (data) => { window.__DATA=data; mode='overview'; buildOverview(); fitScreen(); };
 
-  /* ---- NEW: parent size helper (uses the slider) ---- */
-  function sizeForParent(cnt){
-    // Multiplier from slider (0..12). Gentle log scale.
-    const mult = +document.getElementById('parent-size').value || 6;
-    const r = 8 + mult * Math.log10((cnt||1) + 1);
-    return Math.max(8, Math.min(28, r)); // clamp to keep things readable
+  /* ---- Parent size scaling (linear by degree) ---- */
+  function parentSizeScale(counts){
+    const maxR = +document.getElementById('parent-size').value || 28;   // max radius from slider
+    const minR = 6;                                                     // min radius for parents
+    const minC = d3.min(counts) ?? 0, maxC = d3.max(counts) ?? 1;
+    if (maxC === minC) return ()=> (minR + maxR)/2;
+    const span = maxC - minC;
+    return (c)=> minR + ((c - minC) / span) * (maxR - minR);
   }
 
-  // ---------- builders ----------
+  /* ---------- builders ---------- */
   function buildOverview(){
-    const parents = window.__DATA.nodes
-      .filter(n=>n.group==='parent')
+    const parents = window.__DATA.nodes.filter(n=>n.group==='parent');
+    const sizeFn = parentSizeScale(parents.map(p=>p.count||0));
+    const mapped = parents
       .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => ({ ...n, size: sizeForParent(n.count) }));
-
-    nodes = parents;
-    links = [];
-    layoutOverview();
+      .map(n => ({ ...n, size: sizeFn(n.count||0) }));
+    nodes = mapped; links = []; layoutOverview();
   }
 
   function buildFocus(parentLabel){
-    const p = window.__DATA.nodes.find(n => n.group==='parent' && n.label===parentLabel);
+    const p = window.__DATA.nodes.find(n=>n.group==='parent' && n.label===parentLabel);
     if (!p){ buildOverview(); return; }
-
-    const childrenIds = new Set(
-      window.__DATA.links.filter(e => e.source===("P|"+parentLabel)).map(e=>e.target)
-    );
-    const kids = window.__DATA.nodes.filter(n => childrenIds.has(n.id));
-
-    nodes = [{...p, size: sizeForParent(p.count)}, ...kids.map(k=>({...k, size:5}))];
-    links = kids.map(k => ({ source:nodes[0], target:k, w:1 }));
-
+    const allParents = window.__DATA.nodes.filter(n=>n.group==='parent');
+    const sizeFn = parentSizeScale(allParents.map(x=>x.count||0));
+    const childrenIds = new Set(window.__DATA.links.filter(e=>e.source===("P|"+parentLabel)).map(e=>e.target));
+    const kids = window.__DATA.nodes.filter(n=>childrenIds.has(n.id));
+    nodes = [{...p, size:sizeFn(p.count||0)}, ...kids.map(k=>({...k, size:5}))];
+    links = kids.map(k=>({source:nodes[0], target:k, w:1}));
     layoutFocusNoOverlap();
   }
 
-  // d3-force clustered network with selectable anchor layout
-  let sim = null;
+  let sim=null;
   function buildNetwork(topN, spacing, layoutType){
     sim && sim.stop();
-
     const parents = window.__DATA.groups.slice(0, topN);
+    const sizeFn = parentSizeScale(parents.map(g=>g.count||0));
 
-    // Build node list (parents + children), remember clusterId = parent id
-    const nodeMap = new Map();
-    const edges = [];
-    const getNode = (id, label, group, size, cik, count, clusterId) => {
-      if (!nodeMap.has(id)){
-        nodeMap.set(id, { id, label, group, size, cik, count, clusterId });
-      }
+    const nodeMap=new Map(), edges=[];
+    const getNode=(id,label,group,size,cik,count,clusterId)=>{
+      if(!nodeMap.has(id)) nodeMap.set(id,{id,label,group,size,cik,count,clusterId});
       return nodeMap.get(id);
     };
-
     for (const g of parents){
-      const pid = "P|" + g.parent;
-      const p = getNode(pid, g.parent, "parent", sizeForParent(g.count), g.parent_cik || "", g.count, pid);
+      const pid="P|"+g.parent;
+      const p=getNode(pid,g.parent,"parent",sizeFn(g.count||0),g.parent_cik||"",g.count,pid);
       for (const ch of g.children){
-        const cid = "C|" + ch.child;
-        const c  = getNode(cid, ch.child, "child", 5, ch.child_cik || "", 1, pid);
-        edges.push({ source: p.id, target: c.id });
+        const cid="C|"+ch.child;
+        const c=getNode(cid,ch.child,"child",5,ch.child_cik||"",1,pid);
+        edges.push({source:p.id,target:c.id});
       }
     }
+    const simNodes=Array.from(nodeMap.values()), simLinks=edges;
 
-    const simNodes = Array.from(nodeMap.values());
-    const simLinks = edges;
-
-    // ----- Anchor generation (circle | grid | radial-by-size) -----
-    const P = parents.length || 1;
-    const TWO_PI = Math.PI * 2;
-    const baseRadius = 300;
-    const R = baseRadius * spacing;     // affects circle & radial; grid uses cell size from spacing
-    const anchors = new Map();
-
-    const parentIds = parents.map(g => "P|"+g.parent);
-
-    if (layoutType === 'grid'){
-      const cols = Math.ceil(Math.sqrt(P));
-      const rows = Math.ceil(P / cols);
-      const cell = 180 * spacing;   // grid spacing
-      const x0 = -(cols-1) * cell / 2;
-      const y0 = -(rows-1) * cell / 2;
-      parentIds.forEach((pid, i) => {
-        const c = i % cols, r = Math.floor(i / cols);
-        anchors.set(pid, { x: x0 + c*cell, y: y0 + r*cell });
-      });
-    } else if (layoutType === 'radial'){
-      // sort by size (count desc); biggest farther out
-      const ranked = parents
-        .map(g => ({ id: "P|"+g.parent, count:g.count }))
-        .sort((a,b)=> b.count - a.count);
-      ranked.forEach((it, i) => {
-        const t = (i / P) * TWO_PI;
-        const norm = P>1 ? (1 - i/(P-1)) : 1;      // i=0 (biggest) -> 1
-        const ring = R * (0.8 + 0.6*norm);         // 0.8R..1.4R (bigger -> farther)
-        anchors.set(it.id, { x: ring * Math.cos(t), y: ring * Math.sin(t) });
-      });
-    } else {
-      // circle (default)
-      parentIds.forEach((pid, i) => {
-        const t = (i / P) * TWO_PI;
-        anchors.set(pid, { x: R * Math.cos(t), y: R * Math.sin(t) });
-      });
+    // anchors
+    const P=parents.length||1, TWO_PI=Math.PI*2, baseRadius=300, R=baseRadius*spacing, anchors=new Map();
+    const parentIds=parents.map(g=>"P|"+g.parent);
+    if (layoutType==='grid'){
+      const cols=Math.ceil(Math.sqrt(P)), rows=Math.ceil(P/cols), cell=180*spacing;
+      const x0=-(cols-1)*cell/2, y0=-(rows-1)*cell/2;
+      parentIds.forEach((pid,i)=>{ const c=i%cols, r=Math.floor(i/cols); anchors.set(pid,{x:x0+c*cell,y:y0+r*cell}); });
+    }else if (layoutType==='radial'){
+      const ranked=parents.map(g=>({id:"P|"+g.parent,count:g.count})).sort((a,b)=>b.count-a.count);
+      ranked.forEach((it,i)=>{ const t=(i/P)*TWO_PI; const norm=P>1?(1-i/(P-1)):1; const ring=R*(0.8+0.6*norm); anchors.set(it.id,{x:ring*Math.cos(t),y:ring*Math.sin(t)}); });
+    }else{
+      parentIds.forEach((pid,i)=>{ const t=(i/P)*TWO_PI; anchors.set(pid,{x:R*Math.cos(t),y:R*Math.sin(t)}); });
     }
 
-    // Forces
-    sim = d3.forceSimulation(simNodes)
-      .force('link', d3.forceLink(simLinks)
-          .id(d => d.id)
-          .distance(d => d.target.group === 'child' ? 28 : 40)
-          .strength(0.6))
+    sim=d3.forceSimulation(simNodes)
+      .force('link', d3.forceLink(simLinks).id(d=>d.id).distance(d=>d.target.group==='child'?28:40).strength(0.6))
       .force('charge', d3.forceManyBody().strength(-35))
-      .force('collide', d3.forceCollide().radius(d => (d.size || 6) + 4))
-      .force('x', d3.forceX(d => {
-          const a = anchors.get(d.clusterId);
-          return a ? a.x : 0;
-        }).strength(d => d.group === 'parent' ? 0.95 : 0.35))
-      .force('y', d3.forceY(d => {
-          const a = anchors.get(d.clusterId);
-          return a ? a.y : 0;
-        }).strength(d => d.group === 'parent' ? 0.95 : 0.35))
+      .force('collide', d3.forceCollide().radius(d=>(d.size||6)+4))
+      .force('x', d3.forceX(d=> (anchors.get(d.clusterId)||{x:0}).x).strength(d=>d.group==='parent'?0.95:0.35))
+      .force('y', d3.forceY(d=> (anchors.get(d.clusterId)||{y:0}).y).strength(d=>d.group==='parent'?0.95:0.35))
       .force('center', d3.forceCenter(0,0))
       .stop();
+    for(let i=0;i<350;i++) sim.tick();
 
-    for (let i = 0; i < 350; i++) sim.tick();
-
-    nodes = simNodes;
-    links = simLinks.map(l => ({
-      source: nodeMap.get(l.source.id || l.source),
-      target: nodeMap.get(l.target.id || l.target)
-    }));
+    nodes=simNodes;
+    links=simLinks.map(l=>({source:nodeMap.get(l.source.id||l.source), target:nodeMap.get(l.target.id||l.target)}));
   }
 
-  // ---------- layouts ----------
-  function layout(){ 
-    if (mode==='overview') layoutOverview();
-    else if (mode==='focus') layoutFocusNoOverlap();
-  }
-
+  /* ---------- layouts ---------- */
+  function layout(){ if(mode==='overview') layoutOverview(); else if(mode==='focus') layoutFocusNoOverlap(); }
   function layoutOverview(){
-    const cw = canvas.width, ch = canvas.height, pad=60;
-    const n = nodes.length; if (!n) return;
-    const cols = Math.ceil(Math.sqrt(n));
-    const rows = Math.ceil(n/cols);
-    const cellW = (cw - pad*2) / cols;
-    const cellH = (ch - pad*2) / rows;
-    nodes.forEach((node, i) => {
-      const c = i % cols;
-      const r = Math.floor(i / cols);
-      node.x = pad + c*cellW + cellW/2 + (Math.random()-0.5)*4;
-      node.y = pad + r*cellH + cellH/2 + (Math.random()-0.5)*4;
-    });
+    const cw=canvas.width,ch=canvas.height,pad=60,n=nodes.length; if(!n) return;
+    const cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
+    const cellW=(cw-pad*2)/cols, cellH=(ch-pad*2)/rows;
+    nodes.forEach((node,i)=>{ const c=i%cols, r=Math.floor(i/cols); node.x=pad+c*cellW+cellW/2+(Math.random()-0.5)*4; node.y=pad+r*cellH+cellH/2+(Math.random()-0.5)*4; });
   }
-
-  // Focus = parent center; children packed on rings (no overlap)
   function layoutFocusNoOverlap(){
-    const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
-    const parent = nodes[0];
-    parent.x = cx; parent.y = cy;
-
-    const kids = nodes.slice(1);
-    if (!kids.length) return;
-
-    const startRadius = 120, ringGap=90, minSepPx=12, labelPadPx=8;
-    const needPx = (node) => Math.max(2*(node.size||7), measure.measureText(node.label||'').width + labelPadPx) + minSepPx;
-
-    let ringIndex = 0, angleUsed = 0, R = startRadius;
-    const TWO_PI = Math.PI*2, startAngle = Math.random()*TWO_PI;
-
-    const order = kids.slice().sort((a,b)=> needPx(b) - needPx(a));
-    for (const k of order){
-      let spanPx = needPx(k);
-      let ang = spanPx / R;
-      while (angleUsed + ang > TWO_PI && ringIndex < 100){
-        ringIndex++; R = startRadius + ringIndex*ringGap; angleUsed = 0; ang = spanPx / R;
-      }
-      const t = startAngle + angleUsed + ang/2;
-      k.x = cx + R*Math.cos(t);
-      k.y = cy + R*Math.sin(t);
-      angleUsed += ang;
+    const cw=canvas.width,ch=canvas.height,cx=cw/2,cy=ch/2;
+    const parent=nodes[0]; parent.x=cx; parent.y=cy;
+    const kids=nodes.slice(1); if(!kids.length) return;
+    const startR=120, ringGap=90, minSep=12, labelPad=8;
+    const needPx = n => Math.max(2*(n.size||7), measure.measureText(n.label||'').width + labelPad)+minSep;
+    let ring=0, used=0, R=startR, TWO_PI=Math.PI*2, start=Math.random()*TWO_PI;
+    const order=kids.slice().sort((a,b)=> needPx(b)-needPx(a));
+    for(const k of order){
+      let span=needPx(k), ang=span/R;
+      while(used+ang>TWO_PI && ring<100){ ring++; R=startR+ring*ringGap; used=0; ang=span/R; }
+      const t=start+used+ang/2; k.x=cx+R*Math.cos(t); k.y=cy+R*Math.sin(t); used+=ang;
     }
-    for (let i=1;i<nodes.length;i++){
-      const n = nodes[i], dx=n.x-cx, dy=n.y-cy, r=Math.hypot(dx,dy);
-      const jitter = (Math.random()-0.5)*2.0, t=Math.atan2(dy,dx);
-      n.x = cx + (r+jitter)*Math.cos(t); n.y = cy + (r+jitter)*Math.sin(t);
-    }
+    for(let i=1;i<nodes.length;i++){ const n=nodes[i],dx=n.x-cx,dy=n.y-cy,r=Math.hypot(dx,dy),jit=(Math.random()-0.5)*2.0,t=Math.atan2(dy,dx); n.x=cx+(r+jit)*Math.cos(t); n.y=cy+(r+jit)*Math.sin(t); }
   }
 
-  // ---------- zoom / pan ----------
+  /* ---------- interactions ---------- */
   canvas.addEventListener('wheel', e=>{
-    const m = e.deltaY>0 ? 0.9 : 1.1;
-    const before = toGraph(e.offsetX, e.offsetY);
-    scale *= m;
-    const after = toGraph(e.offsetX, e.offsetY);
-    tx += (after[0]-before[0])*scale;
-    ty += (after[1]-before[1])*scale;
-    e.preventDefault();
-  }, {passive:false});
-
+    const m=e.deltaY>0?0.9:1.1, before=toGraph(e.offsetX,e.offsetY); scale*=m; const after=toGraph(e.offsetX,e.offsetY);
+    tx+=(after[0]-before[0])*scale; ty+=(after[1]-before[1])*scale; e.preventDefault();
+  },{passive:false});
   canvas.addEventListener('mousedown', e=>{
-    const [gx,gy] = toGraph(e.offsetX, e.offsetY);
-    const hit = pick(gx,gy);
-    if (hit){
-      dragging = hit; dragOffset=[gx-hit.x, gy-hit.y];
-      showTip(hit, e.offsetX, e.offsetY);
-      if (mode==='overview' && hit.group==='parent'){
-        buildFocus(hit.label); mode='focus'; fitScreen();
-        const sel = document.getElementById('parent-select'); if (sel) sel.value = hit.label;
-      }
-    } else {
-      panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip();
-    }
+    const [gx,gy]=toGraph(e.offsetX,e.offsetY); const hit=pick(gx,gy);
+    if(hit){ dragging=hit; dragOffset=[gx-hit.x, gy-hit.y]; showTip(hit,e.offsetX,e.offsetY);
+      if(mode==='overview' && hit.group==='parent'){ buildFocus(hit.label); mode='focus'; fitScreen(); document.getElementById('parent-select').value=hit.label; }
+    } else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
   });
   window.addEventListener('mousemove', e=>{
-    if (dragging){ const [gx,gy] = toGraph(e.offsetX, e.offsetY); dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; showTip(dragging, e.offsetX, e.offsetY); }
-    else if (panning){ tx = panOrig[0] + (e.offsetX - panStart[0]); ty = panOrig[1] + (e.offsetY - panStart[1]); }
+    if(dragging){ const [gx,gy]=toGraph(e.offsetX,e.offsetY); dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; showTip(dragging,e.offsetX,e.offsetY); }
+    else if(panning){ tx=panOrig[0]+(e.offsetX-panStart[0]); ty=panOrig[1]+(e.offsetY-panStart[1]); }
   });
   window.addEventListener('mouseup', ()=>{ dragging=null; panning=false; });
 
   document.getElementById('fit').addEventListener('click', fitScreen);
   document.getElementById('mode-overview').addEventListener('click', ()=>{ buildOverview(); mode='overview'; fitScreen(); });
-  document.getElementById('mode-focus').addEventListener('click', ()=>{
-    const val = document.getElementById('parent-select').value;
-    if (val){ buildFocus(val); mode='focus'; fitScreen(); }
-  });
+  document.getElementById('mode-focus').addEventListener('click', ()=>{ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); mode='focus'; fitScreen(); }});
   document.getElementById('mode-network').addEventListener('click', ()=>{
-    const n = +document.getElementById('net-count').value;
-    const s = +document.getElementById('net-spacing').value;
-    const t = document.getElementById('net-layout').value;
-    buildNetwork(n, s, t); mode='network'; fitScreen();
+    const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value;
+    buildNetwork(n,s,t); mode='network'; fitScreen();
   });
   document.getElementById('rerun').addEventListener('click', ()=>{
-    if (!window.__DATA) return;
-    if (mode==='network'){
-      const n = +document.getElementById('net-count').value;
-      const s = +document.getElementById('net-spacing').value;
-      const t = document.getElementById('net-layout').value;
-      buildNetwork(n, s, t); fitScreen();
-    } else if (mode==='focus'){
-      const val = document.getElementById('parent-select').value;
-      if (val){ buildFocus(val); fitScreen(); }
-    } else {
-      buildOverview(); fitScreen();
-    }
+    if(!window.__DATA) return;
+    if(mode==='network'){ const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
+    else if(mode==='focus'){ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); fitScreen(); } }
+    else { buildOverview(); fitScreen(); }
   });
-
-  // react to controls
   ['net-count','net-spacing','net-layout'].forEach(id=>{
     document.getElementById(id).addEventListener('change', ()=>{
-      if (mode==='network'){
-        const n = +document.getElementById('net-count').value;
-        const s = +document.getElementById('net-spacing').value;
-        const t = document.getElementById('net-layout').value;
-        buildNetwork(n, s, t); fitScreen();
-      }
+      if(mode==='network'){ const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
     });
   });
-  // NEW: live parent-size updates for all modes
-  document.getElementById('parent-size').addEventListener('input', () => {
-    if (!window.__DATA) return;
-    if (mode === 'overview') {
-      buildOverview(); fitScreen();
-    } else if (mode === 'focus') {
-      const val = document.getElementById('parent-select').value;
-      if (val) { buildFocus(val); fitScreen(); }
-    } else if (mode === 'network') {
-      const n = +document.getElementById('net-count').value;
-      const s = +document.getElementById('net-spacing').value;
-      const t = document.getElementById('net-layout').value;
-      buildNetwork(n, s, t); fitScreen();
-    }
+  // Recompute sizes live when slider moves
+  document.getElementById('parent-size').addEventListener('input', ()=>{
+    if(!window.__DATA) return;
+    if(mode==='overview'){ buildOverview(); fitScreen(); }
+    else if(mode==='focus'){ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); fitScreen(); } }
+    else { const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
   });
 
-  function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
-  function pick(x,y){ for (let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; const dx=x-n.x, dy=y-n.y; const r=(n.size+6); if (dx*dx+dy*dy<=r*r) return n; } return null; }
-  function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); if (n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
+  function toGraph(sx,sy){ return [(sx-tx)/scale,(sy-ty)/scale]; }
+  function pick(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i],dx=x-n.x,dy=y-n.y,r=(n.size+6); if(dx*dx+dy*dy<=r*r) return n; } return null; }
+  function showTip(n,sx,sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if(n.cik) lines.push('CIK: '+n.cik); if(n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  // ---------- draw with label culling ----------
   function draw(){
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
-    const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
-    const childCol  = getComputedStyle(document.documentElement).getPropertyValue('--child').trim()  || '#00A3A1';
-    const linkCol   = getComputedStyle(document.documentElement).getPropertyValue('--link').trim()   || '#C8C4BE';
+    const bg=getComputedStyle(document.documentElement).getPropertyValue('--card').trim()||'#FFF';
+    const parentCol=getComputedStyle(document.documentElement).getPropertyValue('--parent').trim()||'#D04A02';
+    const childCol=getComputedStyle(document.documentElement).getPropertyValue('--child').trim()||'#00A3A1';
+    const linkCol=getComputedStyle(document.documentElement).getPropertyValue('--link').trim()||'#C8C4BE';
 
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
-
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    if ((mode==='focus' || mode==='network') && links.length){
-      const minEdgePx = 0.8;
-      ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
-      ctx.strokeStyle = linkCol;
-      ctx.beginPath();
-      for (const e of links){ const s=e.source,t=e.target; if (!s||!t) continue; ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); }
+    if((mode==='focus'||mode==='network')&&links.length){
+      ctx.lineWidth=Math.max(0.8/scale,0.2/scale); ctx.strokeStyle=linkCol; ctx.beginPath();
+      for(const e of links){ const s=e.source,t=e.target; if(!s||!t) continue; ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); }
       ctx.stroke();
     }
-
-    const minNodePx = 2;
-    for (const n of nodes){
-      const r = Math.max(n.size||7, minNodePx/scale);
-      ctx.beginPath();
-      ctx.fillStyle = (n.group==='parent' ? parentCol : childCol);
-      ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
+    for(const n of nodes){
+      const r=Math.max(n.size||7, 2/scale);
+      ctx.beginPath(); ctx.fillStyle=(n.group==='parent'?parentCol:childCol); ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
     }
     ctx.restore();
 
-    // labels (screen-space culling)
-    const showLabels = (mode==='focus')
-      ? (scale > 0.5 || nodes.length < 180)
-      : (scale > 1.0 || nodes.length < 90);
-
-    if (showLabels){
-      measure.font = baseFont;
-      const fontHeight = 14;
-      const cands = nodes.map(n=>{
-        const r_world = Math.max(n.size||7, minNodePx/scale);
-        const y_world = n.y + r_world + 4;
-        const w_world = measure.measureText(n.label||'').width;
-        const w_screen = w_world * scale;
-        const h_screen = fontHeight * scale;
-        const sx = n.x*scale + tx;
-        const sy = y_world*scale + ty;
-        return { n, sx, sy, w:w_screen, h:h_screen };
+    // label culling
+    const showLabels=(mode==='focus')?(scale>0.5||nodes.length<180):(scale>1.0||nodes.length<90);
+    if(showLabels){
+      measure.font=baseFont; const fontH=14;
+      const cands=nodes.map(n=>{
+        const r_world=Math.max(n.size||7,2/scale);
+        const y_world=n.y+r_world+4;
+        const w_world=measure.measureText(n.label||'').width;
+        return {n, sx:n.x*scale+tx, sy:y_world*scale+ty, w:w_world*scale, h:fontH*scale};
+      }).sort((a,b)=>{
+        const gp=(a.n.group==='parent')-(b.n.group==='parent'); if(gp) return -gp;
+        const d=(b.n.count||0)-(a.n.count||0); if(d) return d;
+        return a.w-b.w;
       });
-
-      cands.sort((a,b)=>{
-        const gp = (a.n.group==='parent') - (b.n.group==='parent');
-        if (gp) return -gp;
-        const d = (b.n.count||0) - (a.n.count||0);
-        if (d) return d;
-        return a.w - b.w;
-      });
-
-      const placed = [];
-      ctx.save();
-      ctx.font = baseFont;
-      ctx.textAlign='center';
-      ctx.textBaseline='top';
-      ctx.fillStyle='#333';
-
-      for (const L of cands){
-        const x0 = L.sx - L.w/2, y0 = L.sy, x1 = x0 + L.w, y1 = y0 + L.h;
-        let overlaps = false;
-        for (const P of placed){
-          if (x0 < P.x1+2 && x1 > P.x0-2 && y0 < P.y1+2 && y1 > P.y0-2){ overlaps = true; break; }
-        }
-        if (!overlaps){
-          placed.push({x0,y0,x1,y1});
-          ctx.fillText(L.n.label, L.sx, L.sy);
-        }
+      const placed=[];
+      ctx.save(); ctx.font=baseFont; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
+      for(const L of cands){
+        const x0=L.sx-L.w/2, y0=L.sy, x1=x0+L.w, y1=y0+L.h;
+        let overlap=false; for(const P of placed){ if(x0<P.x1+2&&x1>P.x0-2&&y0<P.y1+2&&y1>P.y0-2){overlap=true;break;} }
+        if(!overlap){ placed.push({x0,y0,x1,y1}); ctx.fillText(L.n.label, L.sx, L.sy); }
       }
       ctx.restore();
     }
-
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
   function fitScreen(){
-    if (!nodes.length){ return; }
-    const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
+    if(!nodes.length) return;
+    const cw=canvas.width,ch=canvas.height,cx=cw/2,cy=ch/2;
     const minx=Math.min(...nodes.map(n=>n.x)), maxx=Math.max(...nodes.map(n=>n.x));
     const miny=Math.min(...nodes.map(n=>n.y)), maxy=Math.max(...nodes.map(n=>n.y));
-    const w=Math.max(1, maxx-minx), h=Math.max(1, maxy-miny);
-    const s = 0.9 * Math.min(cw/w, ch/h);
-    scale = isFinite(s) ? Math.min(Math.max(s, 0.1), 5) : 1;
-    tx = cx - ((minx+maxx)/2)*scale;
-    ty = cy - ((miny+maxy)/2)*scale;
+    const w=Math.max(1,maxx-minx), h=Math.max(1,maxy-miny);
+    const s=0.9*Math.min(cw/w,ch/h); scale=isFinite(s)?Math.min(Math.max(s,0.1),5):1;
+    tx=cx-((minx+maxx)/2)*scale; ty=cy-((miny+maxy)/2)*scale;
   }
 })();
 </script>
 
-<!-- Last push time (GitHub API). Set GH_OWNER/GH_REPO if autodetect fails. -->
+<!-- Last push time (GitHub API) -->
 <script>
-const GH_OWNER = "";
-const GH_REPO  = "";
-(function () {
-  const el = document.getElementById('gh-push');
-  if (!el) return;
-  let owner = GH_OWNER, repo = GH_REPO;
-  if (!owner || !repo) {
-    if (location.hostname.endsWith('.github.io')) {
-      owner = owner || location.hostname.split('.github.io')[0];
-      const parts = location.pathname.split('/').filter(Boolean);
-      repo  = repo  || (parts[0] || `${owner}.github.io`);
+const GH_OWNER = ""; const GH_REPO  = "";
+(function(){
+  const el=document.getElementById('gh-push'); if(!el) return;
+  let owner=GH_OWNER, repo=GH_REPO;
+  if(!owner||!repo){
+    if(location.hostname.endsWith('.github.io')){
+      owner=owner||location.hostname.split('.github.io')[0];
+      const parts=location.pathname.split('/').filter(Boolean);
+      repo=repo||(parts[0]||`${owner}.github.io`);
     }
   }
-  if (!owner || !repo) { el.textContent = 'unavailable'; return; }
+  if(!owner||!repo){ el.textContent='unavailable'; return; }
   fetch(`https://api.github.com/repos/${owner}/${repo}`)
-    .then(r => r.ok ? r.json() : Promise.reject())
-    .then(meta => { el.textContent = new Date(meta.pushed_at).toLocaleString(); })
-    .catch(() => { el.textContent = 'unavailable'; });
+    .then(r=>r.ok?r.json():Promise.reject())
+    .then(meta=>{ el.textContent=new Date(meta.pushed_at).toLocaleString(); })
+    .catch(()=>{ el.textContent='unavailable'; });
 })();
 </script>
 </body>
