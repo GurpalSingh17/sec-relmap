@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Relationship Map — SEC CSV Viewer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+
+<!-- PapaParse for robust CSV parsing -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+/* ===== PwC-like palette (light UI) ===== */
+:root{
+  --bg:#FAF9F7;           /* warm off-white */
+  --card:#FFFFFF;         /* cards */
+  --ink:#2D2D2C;          /* charcoal text */
+  --muted:#6B6F72;        /* muted text */
+  --line:#E5E1DC;         /* borders */
+  --accent:#D04A02;       /* PwC orange */
+  --parent:#D04A02;       /* parent node */
+  --child:#00A3A1;        /* teal */
+  --link:#C8C4BE;         /* graph edges */
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:blur(6px);z-index:3}
+h1{margin:0 0 6px;font-size:20px}
+.small{color:var(--muted);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center}
+button, .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+input[type="file"]{display:none}
+label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--line);background:#fff;cursor:pointer}
+#drop{border:1px dashed var(--line);border-radius:12px;background:#fff;padding:10px 12px}
+.help{color:var(--muted);font-size:12px}
+
+.tabs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tab{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.tab.active{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent)}
+.controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+input[type="search"]{flex:1;min-width:260px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.view{display:none}
+.view.active{display:block}
+.section{padding:18px}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;margin-bottom:12px}
+summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px}
+summary::-webkit-details-marker{display:none}
+.parent-name{font-weight:600}
+.cik{color:var(--muted)}
+.badge{background:color-mix(in srgb, var(--accent) 12%, white);color:var(--accent);padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid color-mix(in srgb, var(--accent) 30%, white)}
+.inner{padding:10px 4px 14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:8px 6px;vertical-align:top}
+th{text-align:left;color:#474B4E;position:sticky;top:118px;background:var(--card)}
+td.src a{color:#0B6DAA;text-decoration:none}
+.hidden{display:none !important}
+footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
+
+/* Graph view */
+#graph-wrap{height:calc(100vh - 180px);position:relative;border-top:1px solid var(--line);margin-top:10px}
+#graph{width:100%;height:100%;background:#FFF}
+.legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
+.legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.parent{background:var(--parent)}
+.dot.child{background:var(--child)}
+.tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Relationship Map</h1>
+  <div class="small">
+    Parents: <span id="stat-parents">0</span> · Links: <span id="stat-links">0</span>
+  </div>
+
+  <div class="row">
+    <label for="file">Choose CSV</label><input id="file" type="file" accept=".csv,text/csv"/>
+    <div id="drop">…or drop CSV here</div>
+    <span class="help">Expected headers: <code>Parent Entity Name</code>, <code>Child Entity</code> (or <code>Issuer Name</code>), plus optional columns.</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-target="#view-list">List view</button>
+    <button class="tab" data-target="#view-graph">Graph view</button>
+  </div>
+  <div class="controls" id="list-controls">
+    <input id="q" type="search" placeholder="Search parent name…"/>
+    <button id="expand">Expand all</button>
+    <button id="collapse">Collapse all</button>
+    <span class="help">No data leaves your browser.</span>
+  </div>
+</header>
+
+<main>
+  <section id="view-list" class="view active section"><div class="help">Load a CSV to see grouped results.</div></section>
+
+  <section id="view-graph" class="view section">
+    <div id="graph-wrap">
+      <canvas id="graph"></canvas>
+      <div class="legend"><span class="dot parent"></span>Parent · <span class="dot child"></span>Child</div>
+      <div id="tip" class="tooltip"></div>
+    </div>
+  </section>
+</main>
+
+<footer>Generated <span id="gen-ts"></span></footer>
+
+<script>
+document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
+
+// ----- Tab switching -----
+const tabs = document.querySelectorAll('.tab');
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelector(t.dataset.target).classList.add('active');
+  const onGraph = (t.dataset.target==="#view-graph");
+  document.getElementById('list-controls').style.display = onGraph ? "none" : "flex";
+  if (onGraph && window.__graph_on_activate) window.__graph_on_activate();
+}));
+
+// ----- CSV ingest -----
+const fileInput = document.getElementById('file');
+const drop = document.getElementById('drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor='var(--accent)'; });
+drop.addEventListener('dragleave', () => drop.style.borderColor='var(--line)');
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.style.borderColor='var(--line)';
+  const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+fileInput.addEventListener('change', e => { const f = e.target.files[0]; if (f) loadFile(f); });
+
+function loadFile(file){
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: h => (h||"").trim(),
+    complete: (res) => handleData(res.meta.fields, res.data),
+    error: (err) => alert("CSV parse error: " + err)
+  });
+}
+
+// ----- Data handling -----
+let CURRENT = null; // {groups, nodes, links}
+
+function pickCol(cols, ...cands){
+  const lc = {}; cols.forEach(c => lc[(c||'').toLowerCase()] = c);
+  for (const c of cands){
+    if (!c) continue;
+    const k = c.toLowerCase();
+    if (lc[k]) return lc[k];
+  }
+  // try fuzzy: remove spaces and lowercase
+  const compact = {}; cols.forEach(c => compact[(c||'').toLowerCase().replace(/\s+/g,'')] = c);
+  for (const c of cands){
+    const k = (c||'').toLowerCase().replace(/\s+/g,'');
+    if (compact[k]) return compact[k];
+  }
+  return null;
+}
+
+function handleData(headers, rows){
+  const col_parent_name = pickCol(headers,"Parent Entity Name");
+  const col_parent_cik  = pickCol(headers,"Parent Entity CIK");
+  const col_child       = pickCol(headers,"Child Entity","Issuer Name");
+  const col_child_cik   = pickCol(headers,"Child Entity CIK","CIK");
+  const col_entity_type = pickCol(headers,"Entity Type");
+  const col_industry    = pickCol(headers,"Industry Group");
+  const col_juris       = pickCol(headers,"Jurisdiction");
+  const col_date        = pickCol(headers,"Filing Date","signatureDate");
+  const col_clar        = pickCol(headers,"Clarification","relationshipClarification");
+  const col_source      = pickCol(headers,"Source File");
+
+  if (!col_parent_name || !col_child){
+    alert("Missing required headers. Need at least 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name').");
+    return;
+  }
+  // build groups for list
+  const byParent = new Map();
+  for (const r of rows){
+    const p = (r[col_parent_name]||"").trim();
+    const c = (r[col_child]||"").trim();
+    if (!p || !c) continue;
+    const rec = {
+      child     : c,
+      child_cik : (r[col_child_cik]||"").trim(),
+      etype     : (r[col_entity_type]||"").trim(),
+      industry  : (r[col_industry]||"").trim(),
+      juris     : (r[col_juris]||"").trim(),
+      date      : (r[col_date]||"").trim(),
+      clar      : (r[col_clar]||"").trim(),
+      src       : (r[col_source]||"").trim()
+    };
+    if (!byParent.has(p)) byParent.set(p, { parent:p, parent_cik:(r[col_parent_cik]||"").trim(), children:[] });
+    byParent.get(p).children.push(rec);
+  }
+
+  const groups = Array.from(byParent.values())
+    .map(g => ({...g, count:g.children.length, children:g.children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))}))
+    .sort((a,b)=> b.count - a.count || a.parent.localeCompare(b.parent));
+
+  // stats
+  document.getElementById('stat-parents').textContent = groups.length;
+  document.getElementById('stat-links').textContent = rows.length;
+
+  // render list
+  const listSec = document.getElementById('view-list');
+  listSec.innerHTML = groups.map(g => renderGroup(g)).join('');
+
+  // search/expand helpers
+  window.cards = Array.from(document.querySelectorAll('.card'));
+  const q = document.getElementById('q');
+  q.value = '';
+  q.dispatchEvent(new Event('input'));
+
+  // build graph data
+  const nodes = {};
+  const linksMap = new Map(); // key "p||c" -> count
+  function nk(kind, name){ return kind + "|" + (name||"").trim(); }
+
+  for (const g of groups){
+    const pk = nk("P", g.parent);
+    if (!nodes[pk]) nodes[pk] = { id:pk, label:g.parent, group:"parent", cik:g.parent_cik||"" };
+    for (const ch of g.children){
+      const ck = nk("C", ch.child);
+      if (!nodes[ck]) nodes[ck] = { id:ck, label:ch.child, group:"child", cik:ch.child_cik||"" };
+      const key = pk+"||"+ck;
+      linksMap.set(key, (linksMap.get(key)||0)+1);
+    }
+  }
+  const links = Array.from(linksMap.entries()).map(([k,cnt])=>{
+    const [pk,ck] = k.split("||");
+    return { source:pk, target:ck, count:cnt };
+  });
+
+  CURRENT = { groups, nodes:Object.values(nodes), links };
+  if (window.__graph_reload) window.__graph_reload(CURRENT);
+}
+
+function escHtml(s){ return (s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function renderRow(r){
+  const link = r.src ? `<a href="${escHtml(r.src)}" target="_blank" rel="noopener noreferrer">${escHtml(r.src)}</a>` : "";
+  return `<tr>
+    <td>${escHtml(r.child)}</td>
+    <td>${escHtml(r.child_cik)}</td>
+    <td>${escHtml(r.date)}</td>
+    <td>${escHtml(r.juris)}</td>
+    <td>${escHtml(r.etype)}</td>
+    <td>${escHtml(r.industry)}</td>
+    <td>${escHtml(r.clar)}</td>
+    <td class="src">${link}</td>
+  </tr>`;
+}
+function renderGroup(g){
+  const rows = g.children.map(renderRow).join('');
+  const cik  = g.parent_cik ? ` · <span class="cik">CIK: ${escHtml(g.parent_cik)}</span>` : '';
+  return `
+<details class="card" data-parent="${escHtml(g.parent).toUpperCase()}">
+  <summary><span class="parent-name">${escHtml(g.parent)}</span>${cik} <span class="badge">${g.count}</span></summary>
+  <div class="inner">
+    <table>
+      <thead>
+        <tr>
+          <th>Child Entity</th><th>Child CIK</th><th>Filing Date</th><th>Jurisdiction</th>
+          <th>Entity Type</th><th>Industry Group</th><th>Clarification</th><th>Source</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+</details>`;
+}
+
+// list view controls
+const q = document.getElementById('q');
+q.addEventListener('input', ()=>{
+  const term = (q.value||'').trim().toUpperCase();
+  let shown = 0;
+  for (const c of (window.cards||[])){
+    const name = c.dataset.parent || '';
+    const hit = !term || name.includes(term);
+    c.classList.toggle('hidden', !hit);
+    if (hit) shown++;
+  }
+  document.getElementById('stat-parents').textContent = shown || (CURRENT ? CURRENT.groups.length : 0);
+});
+document.getElementById('expand').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = true; });
+document.getElementById('collapse').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = false; });
+
+// ----- Graph (Canvas + small force layout) -----
+(function(){
+  const canvas = document.getElementById('graph');
+  const ctx = canvas.getContext('2d', { alpha:false });
+  const tip = document.getElementById('tip');
+
+  function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+
+  let nodes = [], links = [];
+  function scatter(){
+    for (const n of nodes){
+      n.x = (Math.random()*0.6+0.2)*canvas.width;
+      n.y = (Math.random()*0.6+0.2)*canvas.height;
+      n.vx = n.vy = 0;
+    }
+  }
+
+  // expose activator called when Graph tab becomes visible
+  window.__graph_on_activate = () => { resize(); if (canvas.width>10 && canvas.height>10) scatter(); };
+
+  // expose reloader when new CSV arrives
+  window.__graph_reload = (data) => {
+    resize();
+    nodes = data.nodes.map(n => ({...n, x:0,y:0,vx:0,vy:0,fx:null,fy:null,size:(n.group==='parent'?9:7)}));
+    const idMap = Object.fromEntries(nodes.map(n=>[n.id,n]));
+    links = data.links.map(l => ({ source:idMap[l.source], target:idMap[l.target], w:1+Math.min(3,(l.count||1)-1) }));
+    scatter();
+  };
+
+  // zoom/pan
+  let scale=1, tx=0, ty=0, dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
+  canvas.addEventListener('wheel', e=>{
+    const m = e.deltaY>0 ? 0.9 : 1.1;
+    const mx = (e.offsetX - tx)/scale, my = (e.offsetY - ty)/scale;
+    scale *= m; tx = e.offsetX - mx*scale; ty = e.offsetY - my*scale; e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('mousedown', e=>{
+    const [gx,gy] = toGraph(e.offsetX, e.offsetY);
+    const hit = pick(gx,gy);
+    if (hit){ dragging = hit; dragOffset=[gx-hit.x, gy-hit.y]; hit.fx=hit.x; hit.fy=hit.y; showTip(hit, e.offsetX, e.offsetY); }
+    else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
+  });
+  window.addEventListener('mousemove', e=>{
+    if (dragging){ const [gx,gy] = toGraph(e.offsetX, e.offsetY); dragging.fx=gx-dragOffset[0]; dragging.fy=gy-dragOffset[1]; showTip(dragging, e.offsetX, e.offsetY); }
+    else if (panning){ tx = panOrig[0] + (e.offsetX - panStart[0]); ty = panOrig[1] + (e.offsetY - panStart[1]); }
+  });
+  window.addEventListener('mouseup', ()=>{ if (dragging){ dragging.fx=null; dragging.fy=null; } dragging=null; panning=false; });
+
+  function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
+  function pick(x,y){ for (let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; const dx=x-n.x, dy=y-n.y; const r=(n.size+4); if (dx*dx+dy*dy<=r*r) return n; } return null; }
+  function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
+  function hideTip(){ tip.style.display='none'; }
+
+  // physics
+  const CENTER=0.02, LINK_K=0.03, LINK_LEN=90, REPULSION=1200, FRICTION=0.86;
+
+  function step(){
+    for (const e of links){
+      const dx=e.target.x-e.source.x, dy=e.target.y-e.source.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||0.001, force=LINK_K*(d-LINK_LEN);
+      const fx=force*dx/d, fy=force*dy/d;
+      e.source.vx += fx; e.source.vy += fy;
+      e.target.vx -= fx; e.target.vy -= fy;
+    }
+    for (let i=0;i<nodes.length;i++){
+      for (let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j];
+        const dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy+1e-6;
+        const f=REPULSION/d2, fx=f*dx, fy=f*dy;
+        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+      }
+    }
+    const cx=canvas.width/2, cy=canvas.height/2;
+    for (const n of nodes){
+      n.vx += (cx-n.x)*CENTER; n.vy += (cy-n.y)*CENTER;
+      n.vx *= FRICTION; n.vy *= FRICTION;
+      n.x += (n.fx!=null ? (n.fx-n.x)*0.6 : n.vx);
+      n.y += (n.fy!=null ? (n.fy-n.y)*0.6 : n.vy);
+    }
+  }
+
+  function draw(){
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
+    ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
+
+    // links
+    ctx.lineWidth=1; ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--link').trim() || '#C8C4BE';
+    ctx.beginPath(); for (const e of links){ ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y); } ctx.stroke();
+
+    // nodes
+    const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
+    const childCol  = getComputedStyle(document.documentElement).getPropertyValue('--child').trim()  || '#00A3A1';
+    for (const n of nodes){
+      ctx.beginPath();
+      ctx.fillStyle = (n.group==='parent' ? parentCol : childCol);
+      ctx.arc(n.x,n.y,n.size,0,Math.PI*2); ctx.fill();
+    }
+
+    // labels
+    ctx.font='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
+    for (const n of nodes){ ctx.fillText(n.label, n.x, n.y + n.size + 4); }
+    ctx.restore();
+  }
+
+  function tick(){ step(); draw(); requestAnimationFrame(tick); }
+  tick();
+})();
+</script>
+</body>
+</html>
