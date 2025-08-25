@@ -53,7 +53,7 @@ td.src a{color:#0B6DAA;text-decoration:none}
 footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
 /* Graph view */
-#graph-wrap{height:calc(100vh - 240px);position:relative;border-top:1px solid var(--line);margin-top:10px}
+#graph-wrap{height:calc(100vh - 260px);position:relative;border-top:1px solid var(--line);margin-top:10px}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
@@ -111,6 +111,11 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
     <label class="pill">Spacing
       <input id="net-spacing" type="range" min="0.8" max="3.0" step="0.1" value="1.6">
+    </label>
+
+    <!-- NEW: parent size slider -->
+    <label class="pill">Parent size
+      <input id="parent-size" type="range" min="0" max="12" step="0.5" value="6">
     </label>
 
     <select id="parent-select" title="Choose parent (Focus mode)"></select>
@@ -341,12 +346,20 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     fitScreen();
   };
 
+  /* ---- NEW: parent size helper (uses the slider) ---- */
+  function sizeForParent(cnt){
+    // Multiplier from slider (0..12). Gentle log scale.
+    const mult = +document.getElementById('parent-size').value || 6;
+    const r = 8 + mult * Math.log10((cnt||1) + 1);
+    return Math.max(8, Math.min(28, r)); // clamp to keep things readable
+  }
+
   // ---------- builders ----------
   function buildOverview(){
     const parents = window.__DATA.nodes
       .filter(n=>n.group==='parent')
       .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => ({ ...n, size: clamp(6 + 6*Math.log10((n.count||1)+1), 6, 18) }));
+      .map(n => ({ ...n, size: sizeForParent(n.count) }));
 
     nodes = parents;
     links = [];
@@ -362,7 +375,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     );
     const kids = window.__DATA.nodes.filter(n => childrenIds.has(n.id));
 
-    nodes = [{...p, size:12}, ...kids.map(k=>({...k, size:7}))];
+    nodes = [{...p, size: sizeForParent(p.count)}, ...kids.map(k=>({...k, size:5}))];
     links = kids.map(k => ({ source:nodes[0], target:k, w:1 }));
 
     layoutFocusNoOverlap();
@@ -387,7 +400,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
     for (const g of parents){
       const pid = "P|" + g.parent;
-      const p = getNode(pid, g.parent, "parent", 8, g.parent_cik || "", g.count, pid);
+      const p = getNode(pid, g.parent, "parent", sizeForParent(g.count), g.parent_cik || "", g.count, pid);
       for (const ch of g.children){
         const cid = "C|" + ch.child;
         const c  = getNode(cid, ch.child, "child", 5, ch.child_cik || "", 1, pid);
@@ -576,6 +589,8 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       buildOverview(); fitScreen();
     }
   });
+
+  // react to controls
   ['net-count','net-spacing','net-layout'].forEach(id=>{
     document.getElementById(id).addEventListener('change', ()=>{
       if (mode==='network'){
@@ -585,15 +600,20 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
         buildNetwork(n, s, t); fitScreen();
       }
     });
-    if (id==='net-spacing'){
-      document.getElementById(id).addEventListener('input', ()=>{
-        if (mode==='network'){
-          const n = +document.getElementById('net-count').value;
-          const s = +document.getElementById('net-spacing').value;
-          const t = document.getElementById('net-layout').value;
-          buildNetwork(n, s, t); fitScreen();
-        }
-      });
+  });
+  // NEW: live parent-size updates for all modes
+  document.getElementById('parent-size').addEventListener('input', () => {
+    if (!window.__DATA) return;
+    if (mode === 'overview') {
+      buildOverview(); fitScreen();
+    } else if (mode === 'focus') {
+      const val = document.getElementById('parent-select').value;
+      if (val) { buildFocus(val); fitScreen(); }
+    } else if (mode === 'network') {
+      const n = +document.getElementById('net-count').value;
+      const s = +document.getElementById('net-spacing').value;
+      const t = document.getElementById('net-layout').value;
+      buildNetwork(n, s, t); fitScreen();
     }
   });
 
