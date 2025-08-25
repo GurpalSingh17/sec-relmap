@@ -53,14 +53,14 @@ td.src a{color:#0B6DAA;text-decoration:none}
 footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
 /* Graph view */
-#graph-wrap{height:calc(100vh - 230px);position:relative;border-top:1px solid var(--line);margin-top:10px}
+#graph-wrap{height:calc(100vh - 240px);position:relative;border-top:1px solid var(--line);margin-top:10px}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dot.parent{background:var(--parent)}
 .dot.child{background:var(--child)}
 .tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
-#graph-controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+#graph-controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
 .mode-pill{border-color:var(--accent)}
 </style>
 </head>
@@ -94,11 +94,25 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <button id="mode-overview" class="pill">Overview</button>
     <button id="mode-focus" class="pill">Focus parent</button>
     <button id="mode-network" class="pill">Network (clustered)</button>
+
     <label class="pill">Top parents
       <select id="net-count">
         <option>20</option><option selected>50</option><option>100</option><option>200</option>
       </select>
     </label>
+
+    <label class="pill">Layout
+      <select id="net-layout">
+        <option value="circle" selected>Circle</option>
+        <option value="grid">Grid</option>
+        <option value="radial">Radial (by size)</option>
+      </select>
+    </label>
+
+    <label class="pill">Spacing
+      <input id="net-spacing" type="range" min="0.8" max="3.0" step="0.1" value="1.6">
+    </label>
+
     <select id="parent-select" title="Choose parent (Focus mode)"></select>
     <button id="rerun">Re-run layout</button>
     <button id="fit">Fit</button>
@@ -354,26 +368,29 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     layoutFocusNoOverlap();
   }
 
-  // d3-force clustered network (top N parents + their children)
+  // d3-force clustered network with selectable anchor layout
   let sim = null;
-  function buildNetwork(topN){
+  function buildNetwork(topN, spacing, layoutType){
     sim && sim.stop();
 
     const parents = window.__DATA.groups.slice(0, topN);
-    const nodeMap = new Map();
 
-    const getNode = (id, label, group, size, cik, count) => {
-      if (!nodeMap.has(id)) nodeMap.set(id, { id, label, group, size, cik, count });
+    // Build node list (parents + children), remember clusterId = parent id
+    const nodeMap = new Map();
+    const edges = [];
+    const getNode = (id, label, group, size, cik, count, clusterId) => {
+      if (!nodeMap.has(id)){
+        nodeMap.set(id, { id, label, group, size, cik, count, clusterId });
+      }
       return nodeMap.get(id);
     };
 
-    const edges = [];
     for (const g of parents){
       const pid = "P|" + g.parent;
-      const p = getNode(pid, g.parent, "parent", 8, g.parent_cik||"", g.count);
+      const p = getNode(pid, g.parent, "parent", 8, g.parent_cik || "", g.count, pid);
       for (const ch of g.children){
         const cid = "C|" + ch.child;
-        const c  = getNode(cid, ch.child, "child", 5, ch.child_cik||"", 1);
+        const c  = getNode(cid, ch.child, "child", 5, ch.child_cik || "", 1, pid);
         edges.push({ source: p.id, target: c.id });
       }
     }
@@ -381,27 +398,76 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const simNodes = Array.from(nodeMap.values());
     const simLinks = edges;
 
-    // run force simulation
+    // ----- Anchor generation (circle | grid | radial-by-size) -----
+    const P = parents.length || 1;
+    const TWO_PI = Math.PI * 2;
+    const baseRadius = 300;
+    const R = baseRadius * spacing;     // affects circle & radial; grid uses cell size from spacing
+    const anchors = new Map();
+
+    const parentIds = parents.map(g => "P|"+g.parent);
+
+    if (layoutType === 'grid'){
+      const cols = Math.ceil(Math.sqrt(P));
+      const rows = Math.ceil(P / cols);
+      const cell = 180 * spacing;   // grid spacing
+      const x0 = -(cols-1) * cell / 2;
+      const y0 = -(rows-1) * cell / 2;
+      parentIds.forEach((pid, i) => {
+        const c = i % cols, r = Math.floor(i / cols);
+        anchors.set(pid, { x: x0 + c*cell, y: y0 + r*cell });
+      });
+    } else if (layoutType === 'radial'){
+      // sort by size (count desc); biggest farther out
+      const ranked = parents
+        .map(g => ({ id: "P|"+g.parent, count:g.count }))
+        .sort((a,b)=> b.count - a.count);
+      ranked.forEach((it, i) => {
+        const t = (i / P) * TWO_PI;
+        const norm = P>1 ? (1 - i/(P-1)) : 1;      // i=0 (biggest) -> 1
+        const ring = R * (0.8 + 0.6*norm);         // 0.8R..1.4R (bigger -> farther)
+        anchors.set(it.id, { x: ring * Math.cos(t), y: ring * Math.sin(t) });
+      });
+    } else {
+      // circle (default)
+      parentIds.forEach((pid, i) => {
+        const t = (i / P) * TWO_PI;
+        anchors.set(pid, { x: R * Math.cos(t), y: R * Math.sin(t) });
+      });
+    }
+
+    // Forces
     sim = d3.forceSimulation(simNodes)
-      .force('link', d3.forceLink(simLinks).id(d=>d.id).distance(d => d.group==='parent' ? 80 : 55).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-70))
-      .force('collide', d3.forceCollide().radius(d => (d.size||6) + 3))
+      .force('link', d3.forceLink(simLinks)
+          .id(d => d.id)
+          .distance(d => d.target.group === 'child' ? 28 : 40)
+          .strength(0.6))
+      .force('charge', d3.forceManyBody().strength(-35))
+      .force('collide', d3.forceCollide().radius(d => (d.size || 6) + 4))
+      .force('x', d3.forceX(d => {
+          const a = anchors.get(d.clusterId);
+          return a ? a.x : 0;
+        }).strength(d => d.group === 'parent' ? 0.95 : 0.35))
+      .force('y', d3.forceY(d => {
+          const a = anchors.get(d.clusterId);
+          return a ? a.y : 0;
+        }).strength(d => d.group === 'parent' ? 0.95 : 0.35))
       .force('center', d3.forceCenter(0,0))
       .stop();
 
-    // do a fixed number of ticks then freeze
-    for (let i=0;i<350;i++) sim.tick();
+    for (let i = 0; i < 350; i++) sim.tick();
 
-    // plug into renderer
     nodes = simNodes;
-    links = simLinks.map(l => ({ source: nodeMap.get(l.source.id||l.source), target: nodeMap.get(l.target.id||l.target) }));
+    links = simLinks.map(l => ({
+      source: nodeMap.get(l.source.id || l.source),
+      target: nodeMap.get(l.target.id || l.target)
+    }));
   }
 
   // ---------- layouts ----------
   function layout(){ 
     if (mode==='overview') layoutOverview();
     else if (mode==='focus') layoutFocusNoOverlap();
-    // network uses force layout positions already
   }
 
   function layoutOverview(){
@@ -419,6 +485,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     });
   }
 
+  // Focus = parent center; children packed on rings (no overlap)
   function layoutFocusNoOverlap(){
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const parent = nodes[0];
@@ -491,13 +558,17 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   });
   document.getElementById('mode-network').addEventListener('click', ()=>{
     const n = +document.getElementById('net-count').value;
-    buildNetwork(n); mode='network'; fitScreen();
+    const s = +document.getElementById('net-spacing').value;
+    const t = document.getElementById('net-layout').value;
+    buildNetwork(n, s, t); mode='network'; fitScreen();
   });
   document.getElementById('rerun').addEventListener('click', ()=>{
     if (!window.__DATA) return;
     if (mode==='network'){
       const n = +document.getElementById('net-count').value;
-      buildNetwork(n); fitScreen();
+      const s = +document.getElementById('net-spacing').value;
+      const t = document.getElementById('net-layout').value;
+      buildNetwork(n, s, t); fitScreen();
     } else if (mode==='focus'){
       const val = document.getElementById('parent-select').value;
       if (val){ buildFocus(val); fitScreen(); }
@@ -505,12 +576,25 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       buildOverview(); fitScreen();
     }
   });
-  const sel = document.getElementById('parent-select');
-  if (sel) sel.addEventListener('change', e=>{
-    if (e.target.value){ buildFocus(e.target.value); mode='focus'; fitScreen(); }
-  });
-  document.getElementById('net-count').addEventListener('change', ()=>{
-    if (mode==='network'){ const n = +document.getElementById('net-count').value; buildNetwork(n); fitScreen(); }
+  ['net-count','net-spacing','net-layout'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', ()=>{
+      if (mode==='network'){
+        const n = +document.getElementById('net-count').value;
+        const s = +document.getElementById('net-spacing').value;
+        const t = document.getElementById('net-layout').value;
+        buildNetwork(n, s, t); fitScreen();
+      }
+    });
+    if (id==='net-spacing'){
+      document.getElementById(id).addEventListener('input', ()=>{
+        if (mode==='network'){
+          const n = +document.getElementById('net-count').value;
+          const s = +document.getElementById('net-spacing').value;
+          const t = document.getElementById('net-layout').value;
+          buildNetwork(n, s, t); fitScreen();
+        }
+      });
+    }
   });
 
   function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
@@ -529,7 +613,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // edges (visible for focus + network)
     if ((mode==='focus' || mode==='network') && links.length){
       const minEdgePx = 0.8;
       ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
@@ -539,7 +622,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       ctx.stroke();
     }
 
-    // nodes
     const minNodePx = 2;
     for (const n of nodes){
       const r = Math.max(n.size||7, minNodePx/scale);
