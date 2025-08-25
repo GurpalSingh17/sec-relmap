@@ -100,7 +100,10 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   </section>
 </main>
 
-<footer>Generated <span id="gen-ts"></span></footer>
+<footer>
+  Generated <span id="gen-ts"></span>
+  · Last push: <span id="gh-push">loading…</span>
+</footer>
 
 <script>
 document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
@@ -199,7 +202,7 @@ function handleData(headers, rows){
   window.cards = Array.from(document.querySelectorAll('.card'));
   const q = document.getElementById('q'); q.value=''; q.dispatchEvent(new Event('input'));
 
-  // Build graph data (parents, children, edges)
+  // Build graph data
   const nodes = {};
   const linksMap = new Map();
   function nk(kind, name){ return kind + "|" + (name||"").trim(); }
@@ -280,55 +283,49 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   const tip = document.getElementById('tip');
 
   let nodes = [], links = [];
-  let scale=1, tx=0, ty=0;   // zoom/pan
+  let scale=1, tx=0, ty=0;
   let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
 
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); if (nodes.length) layoutStatic(); });
 
-  // Expose activator for Graph tab
   window.__graph_on_activate = () => { resize(); };
 
-  // Reload with new data
   window.__graph_reload = (data) => {
     resize();
-    nodes = data.nodes.map(n => ({...n, x:0,y:0,vx:0,vy:0,fx:null,fy:null,size:(n.group==='parent'?9:7)}));
+    nodes = data.nodes.map(n => ({...n, x:0,y:0,size:(n.group==='parent'?9:7)}));
     const idMap = Object.fromEntries(nodes.map(n=>[n.id,n]));
     links = data.links.map(l => ({ source:idMap[l.source], target:idMap[l.target], w:(l.count||1) }));
     layoutStatic();
     fitScreen();
   };
 
-  // ----- static deterministic layout -----
+  // Static deterministic layout
   function layoutStatic(){
     if (!nodes.length) return;
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=>a.label.localeCompare(b.label));
-    const pR = 0.38 * Math.min(cw,ch);                          // parent ring radius
-    const parentIndex = new Map(parents.map((p,i)=>[p.id,i]));
+    const pR = 0.38 * Math.min(cw,ch);
     parents.forEach((p,i)=>{
       const ang = 2*Math.PI * (i/parents.length);
       p.x = cx + pR * Math.cos(ang);
       p.y = cy + pR * Math.sin(ang);
     });
-
-    // children grouped under each parent
     const childrenByParent = new Map(parents.map(p=>[p.id,[]]));
     for (const e of links) if (e.source.group==='parent') childrenByParent.get(e.source.id)?.push(e.target);
     for (const [pid, kids] of childrenByParent.entries()){
-      // dedupe
       const uniq = Array.from(new Map(kids.map(k=>[k.id,k])).values());
-      const baseR = Math.max(60, 28 + 2*uniq.length);           // child ring radius per cluster
+      const baseR = Math.max(60, 28 + 2*uniq.length);
+      const parent = parents.find(p=>p.id===pid);
       uniq.forEach((c,idx)=>{
         const ang = 2*Math.PI * (idx/uniq.length);
-        const parent = nodes.find(n=>n.id===pid);
         c.x = parent.x + baseR * Math.cos(ang);
         c.y = parent.y + baseR * Math.sin(ang);
       });
     }
   }
 
-  // ----- zoom / pan -----
+  // zoom / pan
   canvas.addEventListener('wheel', e=>{
     const m = e.deltaY>0 ? 0.9 : 1.1;
     const before = toGraph(e.offsetX, e.offsetY);
@@ -359,18 +356,16 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  // Keep things visible when zoomed far out
+  // zoom-safe drawing
   function draw(){
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
     const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
     const childCol  = getComputedStyle(document.documentElement).getPropertyValue('--child').trim()  || '#00A3A1';
     const linkCol   = getComputedStyle(document.documentElement).getPropertyValue('--link').trim()   || '#C8C4BE';
 
-    // clear
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // edges: guarantee at least ~0.8px on screen
     const minEdgePx = 0.8;
     ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
     ctx.strokeStyle = linkCol;
@@ -378,7 +373,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     for (const e of links){ ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y); }
     ctx.stroke();
 
-    // nodes: guarantee at least ~2px radius on screen
     const minNodePx = 2;
     for (const n of nodes){
       const r = Math.max(n.size, minNodePx/scale);
@@ -387,12 +381,9 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
     }
 
-    // labels
     ctx.font='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
     ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
-    for (const n of nodes){
-      if (scale > 0.25) ctx.fillText(n.label, n.x, n.y + Math.max(n.size, minNodePx/scale) + 4);
-    }
+    for (const n of nodes){ if (scale > 0.25) ctx.fillText(n.label, n.x, n.y + Math.max(n.size, minNodePx/scale) + 4); }
 
     ctx.restore();
     requestAnimationFrame(draw);
@@ -400,7 +391,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   requestAnimationFrame(draw);
 
   function fitScreen(){
-    // simple fit: center and set scale so parent ring fits
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const minx=Math.min(...nodes.map(n=>n.x)), maxx=Math.max(...nodes.map(n=>n.x));
     const miny=Math.min(...nodes.map(n=>n.y)), maxy=Math.max(...nodes.map(n=>n.y));
@@ -410,6 +400,31 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     tx = cx - ((minx+maxx)/2)*scale;
     ty = cy - ((miny+maxy)/2)*scale;
   }
+})();
+</script>
+
+<!-- ===== Last push time (GitHub API) =====
+     Leave GH_OWNER / GH_REPO blank to auto-detect from Pages URL.
+     If using a custom domain that hides the path, fill them explicitly. -->
+<script>
+const GH_OWNER = "";   // e.g., "gurpalsingh17"
+const GH_REPO  = "";   // e.g., "sec-relmap"
+(function () {
+  const el = document.getElementById('gh-push');
+  if (!el) return;
+  let owner = GH_OWNER, repo = GH_REPO;
+  if (!owner || !repo) {
+    if (location.hostname.endsWith('.github.io')) {
+      owner = owner || location.hostname.split('.github.io')[0];
+      const parts = location.pathname.split('/').filter(Boolean);
+      repo  = repo  || (parts[0] || `${owner}.github.io`);
+    }
+  }
+  if (!owner || !repo) { el.textContent = 'unavailable'; return; }
+  fetch(`https://api.github.com/repos/${owner}/${repo}`)
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(meta => { el.textContent = new Date(meta.pushed_at).toLocaleString(); })
+    .catch(() => { el.textContent = 'unavailable'; });
 })();
 </script>
 </body>
