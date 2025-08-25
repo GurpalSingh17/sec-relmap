@@ -5,8 +5,9 @@
 <title>Relationship Map — SEC CSV Viewer</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
-<!-- PapaParse -->
+<!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 
 <style>
 :root{
@@ -30,7 +31,7 @@ label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--li
 .tabs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .tab{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 .tab.active{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent)}
-.controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
 input[type="search"]{flex:1;min-width:260px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
 select{padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
 
@@ -52,7 +53,7 @@ td.src a{color:#0B6DAA;text-decoration:none}
 footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
 /* Graph view */
-#graph-wrap{height:calc(100vh - 210px);position:relative;border-top:1px solid var(--line);margin-top:10px}
+#graph-wrap{height:calc(100vh - 230px);position:relative;border-top:1px solid var(--line);margin-top:10px}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
@@ -90,12 +91,17 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   <!-- Graph controls -->
   <div id="graph-controls" class="controls" style="display:none">
     <span class="pill mode-pill">Mode:</span>
-    <button id="mode-overview" class="pill">Overview (parents only)</button>
+    <button id="mode-overview" class="pill">Overview</button>
     <button id="mode-focus" class="pill">Focus parent</button>
-    <select id="parent-select" title="Choose parent (for Focus mode)"></select>
-    <button id="reset-layout">Reset layout</button>
-    <button id="fit">Fit to screen</button>
-    <span class="help">Tip: click a parent in Overview to drill in.</span>
+    <button id="mode-network" class="pill">Network (clustered)</button>
+    <label class="pill">Top parents
+      <select id="net-count">
+        <option>20</option><option selected>50</option><option>100</option><option>200</option>
+      </select>
+    </label>
+    <select id="parent-select" title="Choose parent (Focus mode)"></select>
+    <button id="rerun">Re-run layout</button>
+    <button id="fit">Fit</button>
   </div>
 </header>
 
@@ -292,7 +298,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 </script>
 
 <script>
-/* ===== Graph (Overview + Focus w/ no-overlap rings + label culling) ===== */
+/* ===== Graph (Overview + Focus + Network clustered via d3-force) ===== */
 (function(){
   const canvas = document.getElementById('graph');
   const ctx = canvas.getContext('2d', { alpha:false });
@@ -304,7 +310,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   measure.font = baseFont;
 
   let nodes = [], links = [];
-  let mode = 'overview';         // 'overview' | 'focus'
+  let mode = 'overview';         // 'overview' | 'focus' | 'network'
   let scale=1, tx=0, ty=0;       // zoom/pan
   let dragging=null, dragOffset=[0,0], panning=false, panStart=[0,0], panOrig=[0,0];
 
@@ -312,7 +318,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); layout(); });
-
   window.__graph_on_activate = () => { resize(); };
 
   window.__graph_reload = (data) => {
@@ -322,17 +327,12 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     fitScreen();
   };
 
-  // ---------- Data builders ----------
+  // ---------- builders ----------
   function buildOverview(){
-    // LOG scale + clamp to avoid huge parent bubbles
     const parents = window.__DATA.nodes
       .filter(n=>n.group==='parent')
       .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => {
-        const raw = 6 + 6*Math.log10((n.count||1)+1);
-        const radius = clamp(raw, 6, 18);
-        return { ...n, size: radius };
-      });
+      .map(n => ({ ...n, size: clamp(6 + 6*Math.log10((n.count||1)+1), 6, 18) }));
 
     nodes = parents;
     links = [];
@@ -354,8 +354,55 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     layoutFocusNoOverlap();
   }
 
-  // ---------- Layouts ----------
-  function layout(){ mode==='overview' ? layoutOverview() : layoutFocusNoOverlap(); }
+  // d3-force clustered network (top N parents + their children)
+  let sim = null;
+  function buildNetwork(topN){
+    sim && sim.stop();
+
+    const parents = window.__DATA.groups.slice(0, topN);
+    const nodeMap = new Map();
+
+    const getNode = (id, label, group, size, cik, count) => {
+      if (!nodeMap.has(id)) nodeMap.set(id, { id, label, group, size, cik, count });
+      return nodeMap.get(id);
+    };
+
+    const edges = [];
+    for (const g of parents){
+      const pid = "P|" + g.parent;
+      const p = getNode(pid, g.parent, "parent", 8, g.parent_cik||"", g.count);
+      for (const ch of g.children){
+        const cid = "C|" + ch.child;
+        const c  = getNode(cid, ch.child, "child", 5, ch.child_cik||"", 1);
+        edges.push({ source: p.id, target: c.id });
+      }
+    }
+
+    const simNodes = Array.from(nodeMap.values());
+    const simLinks = edges;
+
+    // run force simulation
+    sim = d3.forceSimulation(simNodes)
+      .force('link', d3.forceLink(simLinks).id(d=>d.id).distance(d => d.group==='parent' ? 80 : 55).strength(0.4))
+      .force('charge', d3.forceManyBody().strength(-70))
+      .force('collide', d3.forceCollide().radius(d => (d.size||6) + 3))
+      .force('center', d3.forceCenter(0,0))
+      .stop();
+
+    // do a fixed number of ticks then freeze
+    for (let i=0;i<350;i++) sim.tick();
+
+    // plug into renderer
+    nodes = simNodes;
+    links = simLinks.map(l => ({ source: nodeMap.get(l.source.id||l.source), target: nodeMap.get(l.target.id||l.target) }));
+  }
+
+  // ---------- layouts ----------
+  function layout(){ 
+    if (mode==='overview') layoutOverview();
+    else if (mode==='focus') layoutFocusNoOverlap();
+    // network uses force layout positions already
+  }
 
   function layoutOverview(){
     const cw = canvas.width, ch = canvas.height, pad=60;
@@ -372,7 +419,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     });
   }
 
-  // Focus = parent center; children packed on rings (no overlap)
   function layoutFocusNoOverlap(){
     const cw=canvas.width, ch=canvas.height, cx=cw/2, cy=ch/2;
     const parent = nodes[0];
@@ -381,44 +427,28 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const kids = nodes.slice(1);
     if (!kids.length) return;
 
-    const startRadius = 120;
-    const ringGap     = 90;
-    const minSepPx    = 12;
-    const labelPadPx  = 8;
-
-    function needPx(node){
-      const w = Math.max(2*(node.size||7), measure.measureText(node.label||'').width + labelPadPx);
-      return w + minSepPx;
-    }
+    const startRadius = 120, ringGap=90, minSepPx=12, labelPadPx=8;
+    const needPx = (node) => Math.max(2*(node.size||7), measure.measureText(node.label||'').width + labelPadPx) + minSepPx;
 
     let ringIndex = 0, angleUsed = 0, R = startRadius;
-    const TWO_PI = Math.PI*2;
-    const startAngle = Math.random() * TWO_PI;
+    const TWO_PI = Math.PI*2, startAngle = Math.random()*TWO_PI;
 
     const order = kids.slice().sort((a,b)=> needPx(b) - needPx(a));
     for (const k of order){
       let spanPx = needPx(k);
       let ang = spanPx / R;
       while (angleUsed + ang > TWO_PI && ringIndex < 100){
-        ringIndex++;
-        R = startRadius + ringIndex*ringGap;
-        angleUsed = 0;
-        ang = spanPx / R;
+        ringIndex++; R = startRadius + ringIndex*ringGap; angleUsed = 0; ang = spanPx / R;
       }
-      const placement = startAngle + angleUsed + ang/2;
-      k.x = cx + R*Math.cos(placement);
-      k.y = cy + R*Math.sin(placement);
+      const t = startAngle + angleUsed + ang/2;
+      k.x = cx + R*Math.cos(t);
+      k.y = cy + R*Math.sin(t);
       angleUsed += ang;
     }
-
-    // tiny jitter
     for (let i=1;i<nodes.length;i++){
-      const n = nodes[i];
-      const dx=n.x-cx, dy=n.y-cy, r=Math.hypot(dx,dy);
-      const jitter = (Math.random()-0.5)*2.0;
-      const t = Math.atan2(dy,dx);
-      n.x = cx + (r+jitter)*Math.cos(t);
-      n.y = cy + (r+jitter)*Math.sin(t);
+      const n = nodes[i], dx=n.x-cx, dy=n.y-cy, r=Math.hypot(dx,dy);
+      const jitter = (Math.random()-0.5)*2.0, t=Math.atan2(dy,dx);
+      n.x = cx + (r+jitter)*Math.cos(t); n.y = cy + (r+jitter)*Math.sin(t);
     }
   }
 
@@ -453,16 +483,34 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   });
   window.addEventListener('mouseup', ()=>{ dragging=null; panning=false; });
 
-  document.getElementById('reset-layout').addEventListener('click', ()=>{ layout(); });
   document.getElementById('fit').addEventListener('click', fitScreen);
   document.getElementById('mode-overview').addEventListener('click', ()=>{ buildOverview(); mode='overview'; fitScreen(); });
   document.getElementById('mode-focus').addEventListener('click', ()=>{
     const val = document.getElementById('parent-select').value;
     if (val){ buildFocus(val); mode='focus'; fitScreen(); }
   });
+  document.getElementById('mode-network').addEventListener('click', ()=>{
+    const n = +document.getElementById('net-count').value;
+    buildNetwork(n); mode='network'; fitScreen();
+  });
+  document.getElementById('rerun').addEventListener('click', ()=>{
+    if (!window.__DATA) return;
+    if (mode==='network'){
+      const n = +document.getElementById('net-count').value;
+      buildNetwork(n); fitScreen();
+    } else if (mode==='focus'){
+      const val = document.getElementById('parent-select').value;
+      if (val){ buildFocus(val); fitScreen(); }
+    } else {
+      buildOverview(); fitScreen();
+    }
+  });
   const sel = document.getElementById('parent-select');
   if (sel) sel.addEventListener('change', e=>{
     if (e.target.value){ buildFocus(e.target.value); mode='focus'; fitScreen(); }
+  });
+  document.getElementById('net-count').addEventListener('change', ()=>{
+    if (mode==='network'){ const n = +document.getElementById('net-count').value; buildNetwork(n); fitScreen(); }
   });
 
   function toGraph(sx,sy){ return [(sx-tx)/scale, (sy-ty)/scale]; }
@@ -470,7 +518,7 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   function showTip(n, sx, sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if (n.cik) lines.push('CIK: '+n.cik); if (n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  // ---------- draw (label culling) ----------
+  // ---------- draw with label culling ----------
   function draw(){
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#FFF';
     const parentCol = getComputedStyle(document.documentElement).getPropertyValue('--parent').trim() || '#D04A02';
@@ -479,18 +527,19 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
     ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // world space for edges + nodes
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    if (mode==='focus' && links.length){
+    // edges (visible for focus + network)
+    if ((mode==='focus' || mode==='network') && links.length){
       const minEdgePx = 0.8;
       ctx.lineWidth = Math.max(minEdgePx/scale, 0.2/scale);
       ctx.strokeStyle = linkCol;
       ctx.beginPath();
-      for (const e of links){ ctx.moveTo(e.source.x,e.source.y); ctx.lineTo(e.target.x,e.target.y); }
+      for (const e of links){ const s=e.source,t=e.target; if (!s||!t) continue; ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); }
       ctx.stroke();
     }
 
+    // nodes
     const minNodePx = 2;
     for (const n of nodes){
       const r = Math.max(n.size||7, minNodePx/scale);
@@ -500,10 +549,10 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     }
     ctx.restore();
 
-    // labels in screen space with culling
+    // labels (screen-space culling)
     const showLabels = (mode==='focus')
       ? (scale > 0.5 || nodes.length < 180)
-      : (scale > 1.4 || nodes.length < 60);
+      : (scale > 1.0 || nodes.length < 90);
 
     if (showLabels){
       measure.font = baseFont;
@@ -519,7 +568,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
         return { n, sx, sy, w:w_screen, h:h_screen };
       });
 
-      // priority: parents, high degree, shorter labels
       cands.sort((a,b)=>{
         const gp = (a.n.group==='parent') - (b.n.group==='parent');
         if (gp) return -gp;
