@@ -69,7 +69,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 <body>
 <header>
   <h1>Relationship Map</h1>
-  <div class="small">Parents: <span id="stat-parents">0</span> · Links: <span id="stat-links">0</span></div>
+  <div class="small">Parents (active): <span id="stat-parents">0</span> · Links (active): <span id="stat-links">0</span></div>
 
   <div class="row">
     <label for="file">Choose CSV</label><input id="file" type="file" accept=".csv,text/csv"/>
@@ -252,8 +252,6 @@ function handleData(headers, rows){
   const maxYear = years.length ? years[years.length-1] : new Date().getFullYear();
 
   CURRENT = { edgeYears, parentsSet, childrenSet, years, minYear, maxYear, col_juris: !!col_juris };
-  document.getElementById('stat-parents').textContent = parentsSet.size;
-  document.getElementById('stat-links').textContent = edgeYears.size;
 
   // list view (group by parent)
   const byParent = new Map();
@@ -332,6 +330,8 @@ document.getElementById('q').addEventListener('input', e=>{
   let hover=null, pinned=new Set();
   let animation=null;
 
+  const INCLUDE_UNDATED = true; // <— keep edges with no Filing Date
+
   const getCss=(v,def)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim()||def;
   const parentCol=()=>getCss('--parent','#D04A02');
   const defaultChildCol=()=>getCss('--child','#00A3A1');
@@ -356,11 +356,11 @@ document.getElementById('q').addEventListener('input', e=>{
   function updateRangeLabel(){ rangeLbl.textContent = `${yearFrom.value} – ${yearTo.value}`; }
   window.updateRangeLabel = updateRangeLabel;
 
-  // Domain colors for Jurisdiction
-  const JUR_PALETTE = d3.schemeTableau10.concat(["#A569BD","#F5B041","#16A085","#5D6D7E","#CA6F1E","#8E44AD"]);
-  function colorForJur(jur, map){
-    if (!map || jur==null) return defaultChildCol();
-    return map.get(jur) || defaultChildCol();
+  // Active stats in header
+  function updateActiveStats(edgeList){
+    const parents = new Set(edgeList.map(e => e.p));
+    document.getElementById('stat-parents').textContent = parents.size;
+    document.getElementById('stat-links').textContent = edgeList.length;
   }
 
   /* ---- active graph rebuild based on time + min-degree + color mapping ---- */
@@ -368,18 +368,31 @@ document.getElementById('q').addEventListener('input', e=>{
     if (!window.CURRENT) return;
     const eY = window.CURRENT.edgeYears;
     const Y0 = +yearFrom.value, Y1 = +yearTo.value;
-    const within = (arr)=> arr.some(y=> y>=Y0 && y<=Y1);
+    const useTime = (window.CURRENT.years && window.CURRENT.years.length > 0);
 
-    // build edges (weight = count of years in window)
     const edges=[], parentDeg=new Map(), childDeg=new Map();
-    const childJurCount = new Map(); // child → Map(jur→count) to choose dominant color
+    const childJurCount = new Map();
+
     for (const rec of eY.values()){
-      const yearsIn = rec.years.filter(y=> y>=Y0 && y<=Y1);
-      if (!yearsIn.length) continue;
-      const w = yearsIn.length;
+      let inWindow = true;
+      let w = 1;
+
+      if (useTime){
+        if (rec.years && rec.years.length){
+          const yearsIn = rec.years.filter(y => y >= Y0 && y <= Y1);
+          inWindow = yearsIn.length > 0;
+          w = Math.max(1, yearsIn.length);
+        } else {
+          inWindow = INCLUDE_UNDATED; // keep edges with no dates
+          w = 1;
+        }
+      }
+      if (!inWindow) continue;
+
       edges.push({ p:rec.parent, c:rec.child, w, jurisList:rec.juris });
       parentDeg.set(rec.parent, (parentDeg.get(rec.parent)||0) + 1);
-      childDeg.set(rec.child, (childDeg.get(rec.child)||0) + 1);
+      childDeg.set(rec.child,   (childDeg.get(rec.child)||0) + 1);
+
       if (rec.juris && rec.juris.length){
         const m = childJurCount.get(rec.child) || new Map();
         rec.juris.forEach(j=> m.set(j,(m.get(j)||0)+1));
@@ -387,7 +400,9 @@ document.getElementById('q').addEventListener('input', e=>{
       }
     }
 
-    // min-degree filter
+    updateActiveStats(edges);
+
+    // min-degree
     const minD = +minDegInp.value;
     const keepParents = new Set(Array.from(parentDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
     const keepChildren = new Set(Array.from(childDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
@@ -401,11 +416,20 @@ document.getElementById('q').addEventListener('input', e=>{
       return { id:"C|"+c, label:c, group:"child", degree:childDeg.get(c)||0, jur:(best||null) };
     });
 
-    const parentSizeFn = sizeScale(parents.map(p=>p.degree));
-    parents.forEach(p=> p.size = parentSizeFn(p.degree));
+    // parent size = linear by degree (active window)
+    const maxR = +parentMax.value || 28, minR = 6;
+    const degs = parents.map(p=>p.degree);
+    const minC = degs.length ? Math.min(...degs) : 0;
+    const maxC = degs.length ? Math.max(...degs) : 1;
+    const sizeFn = (()=> {
+      if (maxC===minC) return ()=> (minR + maxR)/2;
+      const span = maxC-minC;
+      return (c)=> minR + ((c - minC)/span) * (maxR - minR);
+    })();
+    parents.forEach(p=> p.size = sizeFn(p.degree));
     children.forEach(c=> c.size = 5);
 
-    // edges (respect node filter)
+    // edges respecting filters
     const idSet = new Set([...parents.map(n=>n.id), ...children.map(n=>n.id)]);
     const linkObjs=[];
     for (const e of edges){
@@ -413,17 +437,29 @@ document.getElementById('q').addEventListener('input', e=>{
       linkObjs.push({ source:"P|"+e.p, target:"C|"+e.c, w:e.w });
     }
 
-    // jurisdiction legend mapping
+    // jurisdiction color mapping
+    const useJur = colorBySel.value==='jurisdiction';
+    const JUR_PALETTE = d3.schemeTableau10.concat(["#A569BD","#F5B041","#16A085","#5D6D7E","#CA6F1E","#8E44AD"]);
     let jurDomain = [];
-    if (colorBySel.value==='jurisdiction'){
+    if (useJur){
       jurDomain = Array.from(new Set(children.map(n=>n.jur).filter(Boolean))).slice(0, JUR_PALETTE.length-1);
     }
     const jurColorMap = new Map(jurDomain.map((j,i)=> [j, JUR_PALETTE[i]]));
     const otherColor = JUR_PALETTE[JUR_PALETTE.length-1];
 
-    // key legend
+    const nodeMap = new Map([...parents, ...children].map(n=>[n.id,n]));
+    nodes = Array.from(nodeMap.values());
+    links = linkObjs.map(l=>({ source:nodeMap.get(l.source), target:nodeMap.get(l.target), w:l.w }));
+
+    for (const n of nodes){
+      if (n.group==='child'){
+        n.color = useJur ? (n.jur && jurColorMap.get(n.jur) ? jurColorMap.get(n.jur) : otherColor) : defaultChildCol();
+      } else n.color = parentCol();
+    }
+
+    // legend
     const key = document.getElementById('jur-key'); key.innerHTML='';
-    if (colorBySel.value==='jurisdiction'){
+    if (useJur){
       for (const j of jurDomain){
         const el = document.createElement('div'); el.className='key-item';
         el.innerHTML = `<span class="key-box" style="background:${jurColorMap.get(j)}"></span>${escapeHtml(j)}`;
@@ -435,28 +471,6 @@ document.getElementById('q').addEventListener('input', e=>{
         key.appendChild(el);
       }
     }
-
-    // materialize nodes map
-    const nodeMap = new Map([...parents, ...children].map(n=>[n.id,n]));
-    nodes = Array.from(nodeMap.values());
-    links = linkObjs.map(l=>({ source:nodeMap.get(l.source), target:nodeMap.get(l.target), w:l.w }));
-
-    // attach a per-child color
-    for (const n of nodes){
-      if (n.group==='child'){
-        if (colorBySel.value==='jurisdiction'){
-          n.color = n.jur && jurColorMap.get(n.jur) ? jurColorMap.get(n.jur) : otherColor;
-        } else n.color = defaultChildCol();
-      } else n.color = parentCol();
-    }
-  }
-
-  function sizeScale(counts){
-    const maxR = +parentMax.value || 28, minR = 6;
-    const minC = d3.min(counts) ?? 0, maxC = d3.max(counts) ?? 1;
-    if (maxC===minC) return ()=> (minR + maxR)/2;
-    const span = maxC-minC;
-    return (c)=> minR + ((c - minC)/span) * (maxR - minR);
   }
 
   /* ---------- builders ---------- */
