@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>Relationship Map — CSV Viewer</title>
+<title>Relationship Map</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" href="data:,">
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <style>
@@ -69,8 +70,8 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   </div>
 
   <div class="tabs">
-    <button class="tab" data-target="#view-list">List view</button>
-    <button class="tab active" data-target="#view-graph">Graph view</button>
+    <button id="btn-list"  class="tab"      >List view</button>
+    <button id="btn-graph" class="tab active">Graph view</button>
   </div>
 
   <!-- LIST controls -->
@@ -163,33 +164,52 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 <script>
 document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
 
-/* tabs */
-const tabs=document.querySelectorAll('.tab');
-tabs.forEach(t=>t.addEventListener('click',()=>{
-  tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.querySelector(t.dataset.target).classList.add('active');
-  const onGraph=(t.dataset.target==="#view-graph");
-  document.getElementById('list-controls').style.display=onGraph?"none":"flex";
-  document.getElementById('graph-controls').style.display=onGraph?"flex":"none";
-  document.getElementById('time-controls').style.display=onGraph?"flex":"none";
-}));
+/* ---------- simple tab switching (explicit IDs) ---------- */
+const btnList = document.getElementById('btn-list');
+const btnGraph= document.getElementById('btn-graph');
+function showList(){ btnList.classList.add('active'); btnGraph.classList.remove('active');
+  document.getElementById('view-list').classList.add('active');
+  document.getElementById('view-graph').classList.remove('active');
+  document.getElementById('list-controls').style.display='flex';
+  document.getElementById('graph-controls').style.display='none';
+  document.getElementById('time-controls').style.display='none';
+}
+function showGraph(){ btnGraph.classList.add('active'); btnList.classList.remove('active');
+  document.getElementById('view-graph').classList.add('active');
+  document.getElementById('view-list').classList.remove('active');
+  document.getElementById('graph-controls').style.display='flex';
+  document.getElementById('time-controls').style.display='flex';
+  document.getElementById('list-controls').style.display='none';
+}
+btnList.addEventListener('click',showList);
+btnGraph.addEventListener('click',showGraph);
 
-/* CSV ingest */
+/* ---------- CSV ingest (file, drop, or HARDCODED URL) ---------- */
+const HARDCODED = "s5_ok_2025-08-25_15-06-23.csv"; // <- change if you upload a new file name
+
 const fileInput=document.getElementById('file'); const drop=document.getElementById('drop');
 drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='var(--accent)';});
 drop.addEventListener('dragleave',()=>drop.style.borderColor='var(--line)'));
 drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='var(--line)';const f=e.dataTransfer.files?.[0];if(f)loadFile(f);});
 fileInput.addEventListener('change',e=>{const f=e.target.files[0];if(f)loadFile(f);});
 
-function loadFile(file){
-  Papa.parse(file,{header:true,skipEmptyLines:true,transformHeader:h=>(h||"").trim(),
-    complete:(res)=>handleData(res.meta.fields,res.data),
-    error:(err)=>alert("CSV parse error: "+err)
-  });
+async function loadFile(file){
+  const text = await file.text();
+  parseAndHandle(text);
+}
+async function loadUrl(url){
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error(res.status+" "+res.statusText);
+  const text = await res.text();
+  parseAndHandle(text);
+}
+function parseAndHandle(csvText){
+  const out = Papa.parse(csvText, {header:true, skipEmptyLines:true, transformHeader:(h)=>(h||"").trim()});
+  if(out.errors && out.errors.length){ console.warn(out.errors); }
+  handleData(out.meta.fields, out.data);
 }
 
-/* data prep */
+/* ---------- data prep ---------- */
 let CURRENT=null;
 function pickCol(cols,...cands){
   const lc={}; cols.forEach(c=>lc[(c||'').toLowerCase()]=c);
@@ -224,7 +244,7 @@ function handleData(headers, rows){
 
   CURRENT={edgeYears,parentsSet,childrenSet,years,minYear,maxYear,col_juris:!!col_juris};
 
-  // list view
+  // Build list view
   const byParent=new Map();
   for(const r of rows){
     const p=(r[col_parent]||"").trim(), c=(r[col_child]||"").trim(); if(!p||!c) continue;
@@ -242,29 +262,20 @@ function handleData(headers, rows){
         <tbody>${g.children.map(r=>`<tr><td>${escapeHtml(r.child)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.juris)}</td></tr>`).join('')}</tbody>
       </table></div></details>`).join('');
 
-  // focus dropdown
+  // Fill focus dropdown
   const sel=document.getElementById('parent-select');
   sel.innerHTML = `<option value="">— choose parent —</option>` + Array.from(parentsSet).sort().map(p=>`<option>${escapeHtml(p)}</option>`).join('');
 
-  // time controls
+  // Time controls
   const yrFrom=document.getElementById('year-from'), yrTo=document.getElementById('year-to');
   yrFrom.min=minYear; yrFrom.max=maxYear; yrFrom.value=minYear;
-  yrTo.min=maxYear?maxYear:minYear; yrTo.max=maxYear; yrTo.value=maxYear;
+  yrTo.min=minYear;   yrTo.max=maxYear;   yrTo.value=maxYear;
   updateRangeLabel(); drawHistogram(filingsPerYear,minYear,maxYear);
 
   if(window.__graph_reload) window.__graph_reload();
 }
 
-/* histogram */
-function drawHistogram(counts,minYear,maxYear){
-  const cvs=document.getElementById('hist'),ctx=cvs.getContext('2d');
-  const w=cvs.width=260,h=cvs.height=48; ctx.clearRect(0,0,w,h);
-  const years=d3.range(minYear,maxYear+1); const maxV=d3.max(years.map(y=>counts.get(y)||0))||1; const barW=Math.max(1,Math.floor(w/years.length));
-  ctx.fillStyle="#eee"; ctx.fillRect(0,0,w,h); ctx.fillStyle="#bbb";
-  years.forEach((y,i)=>{ const v=(counts.get(y)||0); const bh=Math.round(v/maxV*(h-6)); ctx.fillRect(i*barW,h-bh,barW-1,bh); });
-}
-
-/* list helpers */
+/* ---------- list helpers ---------- */
 function escapeHtml(s){return (s||"").replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 document.getElementById('expand').addEventListener('click',()=>{document.querySelectorAll('#view-list details').forEach(d=>d.open=true);});
 document.getElementById('collapse').addEventListener('click',()=>{document.querySelectorAll('#view-list details').forEach(d=>d.open=false);});
@@ -276,7 +287,16 @@ document.getElementById('q').addEventListener('input',e=>{
   });
 });
 
-/* ================= Graph ================= */
+/* ---------- histogram drawing ---------- */
+function drawHistogram(counts,minYear,maxYear){
+  const cvs=document.getElementById('hist'),ctx=cvs.getContext('2d');
+  const w=cvs.width=260,h=cvs.height=48; ctx.clearRect(0,0,w,h);
+  const years=d3.range(minYear,maxYear+1); const maxV=d3.max(years.map(y=>counts.get(y)||0))||1; const barW=Math.max(1,Math.floor(w/years.length));
+  ctx.fillStyle="#eee"; ctx.fillRect(0,0,w,h); ctx.fillStyle="#bbb";
+  years.forEach((y,i)=>{ const v=(counts.get(y)||0); const bh=Math.round(v/maxV*(h-6)); ctx.fillRect(i*barW,h-bh,barW-1,bh); });
+}
+
+/* ---------- Graph (same as before, with “Apply time filter” default OFF) ---------- */
 (function(){
   const canvas=document.getElementById('graph'), ctx=canvas.getContext('2d',{alpha:false});
   const tip=document.getElementById('tip'); const measure=document.createElement('canvas').getContext('2d'); const baseFont='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial'; measure.font=baseFont;
@@ -346,7 +366,6 @@ document.getElementById('q').addEventListener('input',e=>{
     const sizeFn = (maxC===minC)?(()=> (minR+maxR)/2):((c)=> minR + ((c-minC)/(maxC-minC))*(maxR-minR));
     parents.forEach(p=>p.size=sizeFn(p.degree)); children.forEach(c=>c.size=5);
 
-    const idSet=new Set([...parents.map(n=>n.id),...children.map(n=>n.id)]);
     const linkObjs=edges.filter(e=>keepParents.has(e.p)&&keepChildren.has(e.c))
                         .map(e=>({source:"P|"+e.p,target:"C|"+e.c,w:e.w}));
 
@@ -437,7 +456,7 @@ document.getElementById('q').addEventListener('input',e=>{
 
   canvas.addEventListener('wheel',e=>{ const m=e.deltaY>0?0.9:1.1, before=toGraph(e.offsetX,e.offsetY); scale*=m; const after=toGraph(e.offsetX,e.offsetY); tx+=(after[0]-before[0])*scale; ty+=(after[1]-before[1])*scale; e.preventDefault(); },{passive:false});
   canvas.addEventListener('mousedown',e=>{ const [gx,gy]=toGraph(e.offsetX,e.offsetY), hit=pick(gx,gy);
-    if(hit){ dragging=hit; dragOffset=[gx-hit.x,gy-hit.y]; showTip(hit,e.offsetX,e.offsetY); if(mode==='overview'&&hit.group==='parent'){ selParent.value=hit.label; buildFocus(); mode='focus'; fitScreen(); } }
+    if(hit){ dragging=hit; dragOffset=[gx-hit.x,gy-hit.y]; showTip(hit,e.offsetX,e.offsetY); if(mode==='overview'&&hit.group==='parent'){ document.getElementById('parent-select').value=hit.label; buildFocus(); mode='focus'; fitScreen(); } }
     else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
   });
   window.addEventListener('mousemove',e=>{
@@ -454,17 +473,22 @@ document.getElementById('q').addEventListener('input',e=>{
   document.getElementById('mode-network').addEventListener('click',()=>{mode='network';buildNetwork();fitScreen();});
   document.getElementById('rerun').addEventListener('click',()=>{ if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(); });
 
-  [selParent,countTop,layoutSel,spacingInp,parentMax,minDegInp,maxLabels,colorBySel,timeOn].forEach(el=>{
+  [document.getElementById('parent-select'),document.getElementById('net-count'),document.getElementById('net-layout'),
+   document.getElementById('net-spacing'),document.getElementById('parent-size'),
+   document.getElementById('min-degree'),document.getElementById('max-labels'),
+   document.getElementById('color-by'),document.getElementById('time-on')
+  ].forEach(el=>{
     el.addEventListener('input',()=>{ if(!window.CURRENT) return; if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(false); });
   });
-  [yearFrom,yearTo].forEach(el=>{
-    el.addEventListener('input',()=>{ if(+yearFrom.value>+yearTo.value) yearFrom.value=yearTo.value; updateRangeLabel(); if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(false); });
+  [document.getElementById('year-from'),document.getElementById('year-to')].forEach(el=>{
+    el.addEventListener('input',()=>{ const a=document.getElementById('year-from'), b=document.getElementById('year-to'); if(+a.value>+b.value) a.value=b.value; updateRangeLabel(); if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(false); });
   });
 
   document.getElementById('play').addEventListener('click',()=>{
-    if(!timeOn.checked){ timeOn.checked=true; }
-    const min=+yearFrom.min,max=+yearTo.max; yearFrom.value=min; yearTo.value=min; updateRangeLabel();
-    let h=setInterval(()=>{ let y=+yearTo.value+1; if(y>max){clearInterval(h);return;} yearTo.value=y; if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); },400);
+    const on=document.getElementById('time-on'); if(!on.checked) on.checked=true;
+    const min=+document.getElementById('year-from').min,max=+document.getElementById('year-to').max;
+    document.getElementById('year-from').value=min; document.getElementById('year-to').value=min; updateRangeLabel();
+    let h=setInterval(()=>{ let y=+document.getElementById('year-to').value+1; if(y>max){clearInterval(h);return;} document.getElementById('year-to').value=y; if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); },400);
   });
 
   document.getElementById('export').addEventListener('click',()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='relationship-map.png'; a.click(); });
@@ -505,7 +529,7 @@ document.getElementById('q').addEventListener('input',e=>{
     }
     ctx.restore();
 
-    const K=+maxLabels.value;
+    const K=+document.getElementById('max-labels').value;
     if(K>0){
       const ranked=nodes.slice().sort((a,b)=>{ const gp=(a.group==='parent')-(b.group==='parent'); if(gp) return -gp; const d=(b.degree||0)-(a.degree||0); if(d) return d; return a.label.localeCompare(b.label); }).slice(0,K);
       const placed=[]; ctx.save(); ctx.font=baseFont; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
@@ -519,10 +543,17 @@ document.getElementById('q').addEventListener('input',e=>{
   }
   requestAnimationFrame(draw);
 })();
-</script>
-<script>
-document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
-function updateRangeLabel(){ const from=document.getElementById('year-from'), to=document.getElementById('year-to'), out=document.getElementById('yr-range'); if(from&&to&&out) out.textContent=`${from.value} – ${to.value}`; }
+
+/* ---------- init: auto-load hardcoded CSV ---------- */
+(async function init(){
+  try{
+    await loadUrl(HARDCODED);            // auto-load from the repo
+    showGraph();                         // default to Graph view
+  }catch(err){
+    console.warn("Autoload failed:", err);
+    // Page still works; user can choose/drop a file.
+  }
+})();
 </script>
 </body>
 </html>
