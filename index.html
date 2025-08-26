@@ -4,22 +4,17 @@
 <meta charset="utf-8"/>
 <title>Relationship Map — CSV Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-
-<!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-
 <style>
 :root{
-  /* PwC-ish palette */
-  --bg:#FAF9F7; --card:#FFFFFF; --ink:#2D2D2C; --muted:#6B6F72; --line:#E5E1DC;
-  --accent:#D04A02; --parent:#D04A02; --child:#00A3A1; --link:#C8C4BE;
+  --bg:#FAF9F7;--card:#FFF;--ink:#2D2D2C;--muted:#6B6F72;--line:#E5E1DC;
+  --accent:#D04A02;--parent:#D04A02;--child:#00A3A1;--link:#C8C4BE;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 h1{margin:0 0 6px;font-size:20px}
 .small{color:var(--muted);font-size:13px}
-
 header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:blur(6px);z-index:3}
 .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center}
 button,.pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
@@ -34,14 +29,12 @@ label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--li
 .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
 input[type="search"]{flex:1;min-width:260px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
 select{padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink)}
-.view{display:none}
-.view.active{display:block}
+.view{display:none}.view.active{display:block}
 .section{padding:18px}
 .card{border:1px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;margin-bottom:12px}
 summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px}
 summary::-webkit-details-marker{display:none}
 .parent-name{font-weight:600}
-.cik{color:var(--muted)}
 .badge{background:color-mix(in srgb, var(--accent) 12%, white);color:var(--accent);padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid color-mix(in srgb, var(--accent) 30%, white)}
 .inner{padding:10px 4px 14px}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -54,11 +47,9 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.dot.parent{background:var(--parent)}
-.dot.child{background:var(--child)}
+.dot.parent{background:var(--parent)}.dot.child{background:var(--child)}
 .tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
 .pill strong{margin-right:6px}
-
 .hist{display:flex;align-items:center;gap:8px}
 #hist{width:260px;height:48px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .color-key{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -78,19 +69,19 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-target="#view-list">List view</button>
-    <button class="tab" data-target="#view-graph">Graph view</button>
+    <button class="tab" data-target="#view-list">List view</button>
+    <button class="tab active" data-target="#view-graph">Graph view</button>
   </div>
 
   <!-- LIST controls -->
-  <div class="controls" id="list-controls">
+  <div class="controls" id="list-controls" style="display:none">
     <input id="q" type="search" placeholder="Search parent name…"/>
     <button id="expand">Expand all</button>
     <button id="collapse">Collapse all</button>
   </div>
 
   <!-- GRAPH controls -->
-  <div id="graph-controls" class="controls" style="display:none">
+  <div id="graph-controls" class="controls">
     <span class="pill"><strong>Mode</strong></span>
     <button id="mode-overview" class="pill">Overview</button>
     <button id="mode-focus" class="pill">Focus parent</button>
@@ -126,8 +117,8 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
     <label class="pill">Color children by
       <select id="color-by">
-        <option value="jurisdiction" selected>Jurisdiction</option>
-        <option value="single">Single color</option>
+        <option value="jurisdiction">Jurisdiction</option>
+        <option value="single" selected>Single color</option>
       </select>
     </label>
 
@@ -138,7 +129,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   </div>
 
   <!-- TIME FILTER -->
-  <div id="time-controls" class="controls" style="display:none">
+  <div id="time-controls" class="controls">
     <span class="pill"><strong>Time</strong></span>
     <div class="hist">
       <canvas id="hist"></canvas>
@@ -151,14 +142,14 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
       <input id="year-to" type="range" min="2000" max="2030" step="1" value="2030">
     </label>
     <div class="pill">Range: <span id="yr-range"></span></div>
+    <label class="pill"><input id="time-on" type="checkbox"> Apply time filter</label>
     <div class="color-key" id="jur-key"></div>
   </div>
 </header>
 
 <main>
-  <section id="view-list" class="view active section"><div class="help">Load a CSV to see grouped results.</div></section>
-
-  <section id="view-graph" class="view section">
+  <section id="view-list" class="view section"><div class="help">Load a CSV to see grouped results.</div></section>
+  <section id="view-graph" class="view active section">
     <div id="graph-wrap">
       <canvas id="graph"></canvas>
       <div class="legend"><span class="dot parent"></span>Parent · <span class="dot child"></span>Child</div>
@@ -167,107 +158,83 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   </section>
 </main>
 
-<footer>
-  Generated <span id="gen-ts"></span>
-</footer>
+<footer>Generated <span id="gen-ts"></span></footer>
 
 <script>
 document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
 
-/* ---------- tabs ---------- */
-const tabs = document.querySelectorAll('.tab');
-tabs.forEach(t => t.addEventListener('click', () => {
-  tabs.forEach(x => x.classList.remove('active'));
-  t.classList.add('active');
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+/* tabs */
+const tabs=document.querySelectorAll('.tab');
+tabs.forEach(t=>t.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelector(t.dataset.target).classList.add('active');
-
-  const onGraph = (t.dataset.target==="#view-graph");
-  document.getElementById('list-controls').style.display = onGraph ? "none" : "flex";
-  document.getElementById('graph-controls').style.display = onGraph ? "flex" : "none";
-  document.getElementById('time-controls').style.display = onGraph ? "flex" : "none";
-  if (onGraph && window.__graph_on_activate) window.__graph_on_activate();
+  const onGraph=(t.dataset.target==="#view-graph");
+  document.getElementById('list-controls').style.display=onGraph?"none":"flex";
+  document.getElementById('graph-controls').style.display=onGraph?"flex":"none";
+  document.getElementById('time-controls').style.display=onGraph?"flex":"none";
 }));
 
-/* ---------- CSV ingest ---------- */
-const fileInput = document.getElementById('file');
-const drop = document.getElementById('drop');
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor='var(--accent)'; });
-drop.addEventListener('dragleave', () => drop.style.borderColor='var(--line)');
-drop.addEventListener('drop', e => {
-  e.preventDefault(); drop.style.borderColor='var(--line)';
-  const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f);
-});
-fileInput.addEventListener('change', e => { const f = e.target.files[0]; if (f) loadFile(f); });
+/* CSV ingest */
+const fileInput=document.getElementById('file'); const drop=document.getElementById('drop');
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='var(--accent)';});
+drop.addEventListener('dragleave',()=>drop.style.borderColor='var(--line)'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='var(--line)';const f=e.dataTransfer.files?.[0];if(f)loadFile(f);});
+fileInput.addEventListener('change',e=>{const f=e.target.files[0];if(f)loadFile(f);});
 
 function loadFile(file){
-  Papa.parse(file, {
-    header: true, skipEmptyLines: true, transformHeader: h => (h||"").trim(),
-    complete: (res) => handleData(res.meta.fields, res.data),
-    error: (err) => alert("CSV parse error: " + err)
+  Papa.parse(file,{header:true,skipEmptyLines:true,transformHeader:h=>(h||"").trim(),
+    complete:(res)=>handleData(res.meta.fields,res.data),
+    error:(err)=>alert("CSV parse error: "+err)
   });
 }
 
-/* ---------- data prep ---------- */
-let CURRENT = null;
-function pickCol(cols, ...cands){
-  const lc = {}; cols.forEach(c => lc[(c||'').toLowerCase()] = c);
-  for (const c of cands){ if (lc[c?.toLowerCase()]) return lc[c.toLowerCase()]; }
-  const compact = {}; cols.forEach(c => compact[(c||'').toLowerCase().replace(/\s+/g,'')] = c);
-  for (const c of cands){ const k=(c||'').toLowerCase().replace(/\s+/g,''); if (compact[k]) return compact[k]; }
+/* data prep */
+let CURRENT=null;
+function pickCol(cols,...cands){
+  const lc={}; cols.forEach(c=>lc[(c||'').toLowerCase()]=c);
+  for(const c of cands){ if(lc[c?.toLowerCase()]) return lc[c.toLowerCase()]; }
+  const cmp={}; cols.forEach(c=>cmp[(c||'').toLowerCase().replace(/\s+/g,'')]=c);
+  for(const c of cands){ const k=(c||'').toLowerCase().replace(/\s+/g,''); if(cmp[k]) return cmp[k]; }
   return null;
 }
-const parseYear = (s) => {
-  if (!s) return null;
-  const m = String(s).match(/(\d{4})/); return m ? +m[1] : null;
-};
+const parseYear=s=>{ if(!s) return null; const m=String(s).match(/(\d{4})/); return m?+m[1]:null; };
 
 function handleData(headers, rows){
-  const col_parent = pickCol(headers,"Parent Entity Name");
-  const col_child  = pickCol(headers,"Child Entity","Issuer Name");
-  const col_date   = pickCol(headers,"Filing Date","signatureDate","Date");
-  const col_juris  = pickCol(headers,"Jurisdiction");
-  if (!col_parent || !col_child){ alert("Missing headers. Need 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name')."); return; }
+  const col_parent=pickCol(headers,"Parent Entity Name");
+  const col_child =pickCol(headers,"Child Entity","Issuer Name");
+  const col_date  =pickCol(headers,"Filing Date","signatureDate","Date");
+  const col_juris =pickCol(headers,"Jurisdiction");
+  if(!col_parent||!col_child){ alert("Missing headers. Need 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name')."); return; }
 
-  // Build edge-year list: key = P|<parent>||C|<child> → {years:[], juris:[]}
-  const edgeYears = new Map();
-  const parentsSet = new Set(), childrenSet = new Set();
-  const filingsPerYear = new Map();
+  const edgeYears=new Map(), parentsSet=new Set(), childrenSet=new Set(), filingsPerYear=new Map();
 
-  for (const r of rows){
-    const p = (r[col_parent]||"").trim(); const c = (r[col_child]||"").trim();
-    if (!p || !c) continue;
-    const y = parseYear(r[col_date]); if (y!=null) filingsPerYear.set(y,(filingsPerYear.get(y)||0)+1);
-    const key = "P|"+p+"||C|"+c;
-    const rec = edgeYears.get(key) || { parent:p, child:c, years:[], juris:[] };
-    if (y!=null) rec.years.push(y);
-    const j = (r[col_juris]||"").trim(); if (j) rec.juris.push(j);
-    edgeYears.set(key, rec);
-    parentsSet.add(p); childrenSet.add(c);
+  for(const r of rows){
+    const p=(r[col_parent]||"").trim(), c=(r[col_child]||"").trim(); if(!p||!c) continue;
+    const y=parseYear(r[col_date]); if(y!=null) filingsPerYear.set(y,(filingsPerYear.get(y)||0)+1);
+    const key="P|"+p+"||C|"+c;
+    const rec=edgeYears.get(key)||{parent:p,child:c,years:[],juris:[]};
+    if(y!=null) rec.years.push(y);
+    const j=(r[col_juris]||"").trim(); if(j) rec.juris.push(j);
+    edgeYears.set(key,rec); parentsSet.add(p); childrenSet.add(c);
   }
 
-  // years
-  const years = Array.from(filingsPerYear.keys()).sort((a,b)=>a-b);
-  const minYear = years.length ? years[0] : 2000;
-  const maxYear = years.length ? years[years.length-1] : new Date().getFullYear();
+  const years=Array.from(filingsPerYear.keys()).sort((a,b)=>a-b);
+  const minYear=years.length?years[0]:2000, maxYear=years.length?years[years.length-1]:new Date().getFullYear();
 
-  CURRENT = { edgeYears, parentsSet, childrenSet, years, minYear, maxYear, col_juris: !!col_juris };
+  CURRENT={edgeYears,parentsSet,childrenSet,years,minYear,maxYear,col_juris:!!col_juris};
 
-  // list view (group by parent)
-  const byParent = new Map();
-  for (const r of rows){
-    const p = (r[col_parent]||"").trim(); const c = (r[col_child]||"").trim(); if(!p||!c) continue;
-    if (!byParent.has(p)) byParent.set(p, []);
-    byParent.get(p).push({
-      child:c,
-      date:(r[col_date]||"").trim(),
-      juris: (r[col_juris]||"").trim()
-    });
+  // list view
+  const byParent=new Map();
+  for(const r of rows){
+    const p=(r[col_parent]||"").trim(), c=(r[col_child]||"").trim(); if(!p||!c) continue;
+    if(!byParent.has(p)) byParent.set(p,[]);
+    byParent.get(p).push({child:c,date:(r[col_date]||"").trim(),juris:(r[col_juris]||"").trim()});
   }
-  const groups = Array.from(byParent.entries()).map(([parent, children])=>({
-    parent, count: children.length,
-    children: children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))
-  })).sort((a,b)=> b.count-a.count || a.parent.localeCompare(b.parent));
+  const groups=Array.from(byParent.entries()).map(([parent,children])=>({
+    parent,count:children.length,
+    children:children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))
+  })).sort((a,b)=>b.count-a.count||a.parent.localeCompare(b.parent));
 
   document.getElementById('view-list').innerHTML =
     groups.map(g=>`<details class="card"><summary><span class="parent-name">${escapeHtml(g.parent)}</span> <span class="badge">${g.count}</span></summary>
@@ -276,37 +243,32 @@ function handleData(headers, rows){
       </table></div></details>`).join('');
 
   // focus dropdown
-  const sel = document.getElementById('parent-select');
-  sel.innerHTML = `<option value="">— choose parent —</option>` + Array.from(parentsSet).sort().map(p => `<option>${escapeHtml(p)}</option>`).join('');
+  const sel=document.getElementById('parent-select');
+  sel.innerHTML = `<option value="">— choose parent —</option>` + Array.from(parentsSet).sort().map(p=>`<option>${escapeHtml(p)}</option>`).join('');
 
   // time controls
-  const yrFrom = document.getElementById('year-from'), yrTo = document.getElementById('year-to');
-  yrFrom.min = minYear; yrFrom.max = maxYear; yrFrom.value = minYear;
-  yrTo.min = minYear; yrTo.max = maxYear; yrTo.value = maxYear;
-  updateRangeLabel();
+  const yrFrom=document.getElementById('year-from'), yrTo=document.getElementById('year-to');
+  yrFrom.min=minYear; yrFrom.max=maxYear; yrFrom.value=minYear;
+  yrTo.min=maxYear?maxYear:minYear; yrTo.max=maxYear; yrTo.value=maxYear;
+  updateRangeLabel(); drawHistogram(filingsPerYear,minYear,maxYear);
 
-  drawHistogram(filingsPerYear, minYear, maxYear);
-
-  if (window.__graph_reload) window.__graph_reload();
+  if(window.__graph_reload) window.__graph_reload();
 }
 
-/* ----- histogram mini chart ----- */
-function drawHistogram(counts, minYear, maxYear){
-  const cvs=document.getElementById('hist'), ctx=cvs.getContext('2d');
-  const w=cvs.width=260, h=cvs.height=48; ctx.clearRect(0,0,w,h);
-  const years = d3.range(minYear, maxYear+1);
-  const maxV = d3.max(years.map(y=>counts.get(y)||0)) || 1;
-  const barW = Math.max(1, Math.floor(w/years.length));
-  ctx.fillStyle="#eee"; ctx.fillRect(0,0,w,h);
-  ctx.fillStyle="#bbb";
-  years.forEach((y,i)=>{ const v=(counts.get(y)||0); const bh = Math.round(v/maxV*(h-6)); ctx.fillRect(i*barW, h-bh, barW-1, bh); });
+/* histogram */
+function drawHistogram(counts,minYear,maxYear){
+  const cvs=document.getElementById('hist'),ctx=cvs.getContext('2d');
+  const w=cvs.width=260,h=cvs.height=48; ctx.clearRect(0,0,w,h);
+  const years=d3.range(minYear,maxYear+1); const maxV=d3.max(years.map(y=>counts.get(y)||0))||1; const barW=Math.max(1,Math.floor(w/years.length));
+  ctx.fillStyle="#eee"; ctx.fillRect(0,0,w,h); ctx.fillStyle="#bbb";
+  years.forEach((y,i)=>{ const v=(counts.get(y)||0); const bh=Math.round(v/maxV*(h-6)); ctx.fillRect(i*barW,h-bh,barW-1,bh); });
 }
 
-/* ---------- list helpers ---------- */
+/* list helpers */
 function escapeHtml(s){return (s||"").replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-document.getElementById('expand').addEventListener('click', ()=>{ document.querySelectorAll('#view-list details').forEach(d=>d.open=true); });
-document.getElementById('collapse').addEventListener('click', ()=>{ document.querySelectorAll('#view-list details').forEach(d=>d.open=false); });
-document.getElementById('q').addEventListener('input', e=>{
+document.getElementById('expand').addEventListener('click',()=>{document.querySelectorAll('#view-list details').forEach(d=>d.open=true);});
+document.getElementById('collapse').addEventListener('click',()=>{document.querySelectorAll('#view-list details').forEach(d=>d.open=false);});
+document.getElementById('q').addEventListener('input',e=>{
   const t=(e.target.value||'').trim().toUpperCase();
   document.querySelectorAll('#view-list .card').forEach(card=>{
     const name=(card.querySelector('.parent-name')?.textContent||'').toUpperCase();
@@ -314,310 +276,200 @@ document.getElementById('q').addEventListener('input', e=>{
   });
 });
 
-/* ============================================================
-   Graph
-============================================================ */
+/* ================= Graph ================= */
 (function(){
-  const canvas = document.getElementById('graph');
-  const ctx = canvas.getContext('2d', { alpha:false });
-  const tip = document.getElementById('tip');
-  const measure = document.createElement('canvas').getContext('2d');
-  const baseFont = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-  measure.font = baseFont;
+  const canvas=document.getElementById('graph'), ctx=canvas.getContext('2d',{alpha:false});
+  const tip=document.getElementById('tip'); const measure=document.createElement('canvas').getContext('2d'); const baseFont='12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial'; measure.font=baseFont;
 
-  let nodes=[], links=[], mode='overview';
-  let scale=1, tx=0, ty=0, dragging=null, panning=false, dragOffset=[0,0], panStart=[0,0], panOrig=[0,0];
-  let hover=null, pinned=new Set();
-  let animation=null;
+  let nodes=[],links=[],mode='overview',scale=1,tx=0,ty=0,dragging=null,panning=false,dragOffset=[0,0],panStart=[0,0],panOrig=[0,0],hover=null,pinned=new Set();
 
-  const INCLUDE_UNDATED = true; // <— keep edges with no Filing Date
-
+  const INCLUDE_UNDATED=true;
   const getCss=(v,def)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim()||def;
-  const parentCol=()=>getCss('--parent','#D04A02');
-  const defaultChildCol=()=>getCss('--child','#00A3A1');
-  const linkCol=()=>getCss('--link','#C8C4BE');
+  const parentCol=()=>getCss('--parent','#D04A02'), childCol=()=>getCss('--child','#00A3A1'), linkCol=()=>getCss('--link','#C8C4BE');
 
-  function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
-  window.addEventListener('resize', ()=>{ resize(); layout(); });
-  window.__graph_on_activate=()=>{ resize(); };
+  function resize(){ canvas.width=canvas.clientWidth; canvas.height=canvas.clientHeight; }
+  window.addEventListener('resize',()=>{resize();layout();}); resize();
 
-  // UI references
-  const selParent = document.getElementById('parent-select');
-  const countTop   = document.getElementById('net-count');
-  const layoutSel  = document.getElementById('net-layout');
-  const spacingInp = document.getElementById('net-spacing');
-  const parentMax  = document.getElementById('parent-size');
-  const minDegInp  = document.getElementById('min-degree');
-  const maxLabels  = document.getElementById('max-labels');
-  const colorBySel = document.getElementById('color-by');
-  const yearFrom = document.getElementById('year-from');
-  const yearTo   = document.getElementById('year-to');
-  const rangeLbl = document.getElementById('yr-range');
-  function updateRangeLabel(){ rangeLbl.textContent = `${yearFrom.value} – ${yearTo.value}`; }
-  window.updateRangeLabel = updateRangeLabel;
+  /* controls */
+  const selParent=document.getElementById('parent-select');
+  const countTop=document.getElementById('net-count');
+  const layoutSel=document.getElementById('net-layout');
+  const spacingInp=document.getElementById('net-spacing');
+  const parentMax=document.getElementById('parent-size');
+  const minDegInp=document.getElementById('min-degree');
+  const maxLabels=document.getElementById('max-labels');
+  const colorBySel=document.getElementById('color-by');
+  const yearFrom=document.getElementById('year-from'), yearTo=document.getElementById('year-to'), timeOn=document.getElementById('time-on');
+  const rangeLbl=document.getElementById('yr-range'); function updateRangeLabel(){rangeLbl.textContent=`${yearFrom.value} – ${yearTo.value}`;} window.updateRangeLabel=updateRangeLabel;
 
-  // Active stats in header
-  function updateActiveStats(edgeList){
-    const parents = new Set(edgeList.map(e => e.p));
-    document.getElementById('stat-parents').textContent = parents.size;
-    document.getElementById('stat-links').textContent = edgeList.length;
-  }
+  function updateActiveStats(edgeList){const parents=new Set(edgeList.map(e=>e.p));document.getElementById('stat-parents').textContent=parents.size;document.getElementById('stat-links').textContent=edgeList.length;}
 
-  /* ---- active graph rebuild based on time + min-degree + color mapping ---- */
   function buildActiveGraph(){
-    if (!window.CURRENT) return;
-    const eY = window.CURRENT.edgeYears;
-    const Y0 = +yearFrom.value, Y1 = +yearTo.value;
-    const useTime = (window.CURRENT.years && window.CURRENT.years.length > 0);
+    if(!window.CURRENT) return;
+    const eY=window.CURRENT.edgeYears, Y0=+yearFrom.value, Y1=+yearTo.value;
+    const useTime = !!timeOn.checked && window.CURRENT.years && window.CURRENT.years.length>0;
 
-    const edges=[], parentDeg=new Map(), childDeg=new Map();
-    const childJurCount = new Map();
+    const edges=[], parentDeg=new Map(), childDeg=new Map(), childJurCount=new Map();
 
-    for (const rec of eY.values()){
-      let inWindow = true;
-      let w = 1;
-
-      if (useTime){
-        if (rec.years && rec.years.length){
-          const yearsIn = rec.years.filter(y => y >= Y0 && y <= Y1);
-          inWindow = yearsIn.length > 0;
-          w = Math.max(1, yearsIn.length);
-        } else {
-          inWindow = INCLUDE_UNDATED; // keep edges with no dates
-          w = 1;
-        }
+    for(const rec of eY.values()){
+      let inWindow=true, w=1;
+      if(useTime){
+        if(rec.years && rec.years.length){
+          const yearsIn=rec.years.filter(y=>y>=Y0 && y<=Y1);
+          inWindow = yearsIn.length>0;
+          w=Math.max(1, yearsIn.length);
+        }else{ inWindow=INCLUDE_UNDATED; w=1; }
       }
-      if (!inWindow) continue;
-
-      edges.push({ p:rec.parent, c:rec.child, w, jurisList:rec.juris });
-      parentDeg.set(rec.parent, (parentDeg.get(rec.parent)||0) + 1);
-      childDeg.set(rec.child,   (childDeg.get(rec.child)||0) + 1);
-
-      if (rec.juris && rec.juris.length){
-        const m = childJurCount.get(rec.child) || new Map();
-        rec.juris.forEach(j=> m.set(j,(m.get(j)||0)+1));
-        childJurCount.set(rec.child, m);
+      if(!inWindow) continue;
+      edges.push({p:rec.parent,c:rec.child,w, jurisList:rec.juris});
+      parentDeg.set(rec.parent,(parentDeg.get(rec.parent)||0)+1);
+      childDeg.set(rec.child,(childDeg.get(rec.child)||0)+1);
+      if(rec.juris && rec.juris.length){
+        const m=childJurCount.get(rec.child)||new Map(); rec.juris.forEach(j=>m.set(j,(m.get(j)||0)+1)); childJurCount.set(rec.child,m);
       }
     }
-
     updateActiveStats(edges);
 
-    // min-degree
-    const minD = +minDegInp.value;
-    const keepParents = new Set(Array.from(parentDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
-    const keepChildren = new Set(Array.from(childDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
+    const minD=+minDegInp.value;
+    const keepParents=new Set([...parentDeg].filter(([,d])=>d>=minD).map(([k])=>k));
+    const keepChildren=new Set([...childDeg].filter(([,d])=>d>=minD).map(([k])=>k));
 
-    // nodes
-    const parents = Array.from(keepParents).map(p=>({ id:"P|"+p, label:p, group:"parent", degree:parentDeg.get(p)||0 }));
-    const children = Array.from(keepChildren).map(c=>{
-      const jurMap = childJurCount.get(c);
-      let best=null, bestN=-1;
-      if (jurMap) for (const [j,n] of jurMap) if (n>bestN){ best=j; bestN=n; }
-      return { id:"C|"+c, label:c, group:"child", degree:childDeg.get(c)||0, jur:(best||null) };
+    const parents=[...keepParents].map(p=>({id:"P|"+p,label:p,group:"parent",degree:parentDeg.get(p)||0}));
+    const children=[...keepChildren].map(c=>{
+      const jurMap=childJurCount.get(c); let best=null,bestN=-1;
+      if(jurMap) for(const [j,n] of jurMap) if(n>bestN){best=j;bestN=n;}
+      return {id:"C|"+c,label:c,group:"child",degree:childDeg.get(c)||0,jur:(best||null)};
     });
 
-    // parent size = linear by degree (active window)
-    const maxR = +parentMax.value || 28, minR = 6;
-    const degs = parents.map(p=>p.degree);
-    const minC = degs.length ? Math.min(...degs) : 0;
-    const maxC = degs.length ? Math.max(...degs) : 1;
-    const sizeFn = (()=> {
-      if (maxC===minC) return ()=> (minR + maxR)/2;
-      const span = maxC-minC;
-      return (c)=> minR + ((c - minC)/span) * (maxR - minR);
-    })();
-    parents.forEach(p=> p.size = sizeFn(p.degree));
-    children.forEach(c=> c.size = 5);
+    const maxR=+parentMax.value||28, minR=6;
+    const degs=parents.map(p=>p.degree); const minC=degs.length?Math.min(...degs):0, maxC=degs.length?Math.max(...degs):1;
+    const sizeFn = (maxC===minC)?(()=> (minR+maxR)/2):((c)=> minR + ((c-minC)/(maxC-minC))*(maxR-minR));
+    parents.forEach(p=>p.size=sizeFn(p.degree)); children.forEach(c=>c.size=5);
 
-    // edges respecting filters
-    const idSet = new Set([...parents.map(n=>n.id), ...children.map(n=>n.id)]);
-    const linkObjs=[];
-    for (const e of edges){
-      if (!keepParents.has(e.p) || !keepChildren.has(e.c)) continue;
-      linkObjs.push({ source:"P|"+e.p, target:"C|"+e.c, w:e.w });
+    const idSet=new Set([...parents.map(n=>n.id),...children.map(n=>n.id)]);
+    const linkObjs=edges.filter(e=>keepParents.has(e.p)&&keepChildren.has(e.c))
+                        .map(e=>({source:"P|"+e.p,target:"C|"+e.c,w:e.w}));
+
+    const useJur=(colorBySel.value==='jurisdiction');
+    const PAL=d3.schemeTableau10.concat(["#A569BD","#F5B041","#16A085","#5D6D7E","#CA6F1E","#8E44AD"]);
+    let jurDomain=[]; if(useJur){ jurDomain=[...new Set(children.map(n=>n.jur).filter(Boolean))].slice(0,PAL.length-1); }
+    const jurColor=new Map(jurDomain.map((j,i)=>[j,PAL[i]])); const otherCol=PAL[PAL.length-1];
+
+    const nodeMap=new Map([...parents,...children].map(n=>[n.id,n]));
+    nodes=[...nodeMap.values()];
+    links=linkObjs.map(l=>({source:nodeMap.get(l.source), target:nodeMap.get(l.target), w:l.w}));
+
+    for(const n of nodes){
+      if(n.group==='child') n.color = useJur ? (n.jur && jurColor.get(n.jur)?jurColor.get(n.jur):otherCol) : childCol();
+      else n.color=parentCol();
     }
 
-    // jurisdiction color mapping
-    const useJur = colorBySel.value==='jurisdiction';
-    const JUR_PALETTE = d3.schemeTableau10.concat(["#A569BD","#F5B041","#16A085","#5D6D7E","#CA6F1E","#8E44AD"]);
-    let jurDomain = [];
-    if (useJur){
-      jurDomain = Array.from(new Set(children.map(n=>n.jur).filter(Boolean))).slice(0, JUR_PALETTE.length-1);
-    }
-    const jurColorMap = new Map(jurDomain.map((j,i)=> [j, JUR_PALETTE[i]]));
-    const otherColor = JUR_PALETTE[JUR_PALETTE.length-1];
-
-    const nodeMap = new Map([...parents, ...children].map(n=>[n.id,n]));
-    nodes = Array.from(nodeMap.values());
-    links = linkObjs.map(l=>({ source:nodeMap.get(l.source), target:nodeMap.get(l.target), w:l.w }));
-
-    for (const n of nodes){
-      if (n.group==='child'){
-        n.color = useJur ? (n.jur && jurColorMap.get(n.jur) ? jurColorMap.get(n.jur) : otherColor) : defaultChildCol();
-      } else n.color = parentCol();
-    }
-
-    // legend
-    const key = document.getElementById('jur-key'); key.innerHTML='';
-    if (useJur){
-      for (const j of jurDomain){
-        const el = document.createElement('div'); el.className='key-item';
-        el.innerHTML = `<span class="key-box" style="background:${jurColorMap.get(j)}"></span>${escapeHtml(j)}`;
-        key.appendChild(el);
-      }
-      if (children.some(n=>!n.jur || !jurColorMap.get(n.jur))){
-        const el = document.createElement('div'); el.className='key-item';
-        el.innerHTML = `<span class="key-box" style="background:${otherColor}"></span>Other`;
-        key.appendChild(el);
-      }
+    const key=document.getElementById('jur-key'); key.innerHTML='';
+    if(useJur){
+      for(const j of jurDomain){ const el=document.createElement('div'); el.className='key-item'; el.innerHTML=`<span class="key-box" style="background:${jurColor.get(j)}"></span>${escapeHtml(j)}`; key.appendChild(el); }
+      if(children.some(n=>!n.jur || !jurColor.get(n.jur))){ const el=document.createElement('div'); el.className='key-item'; el.innerHTML=`<span class="key-box" style="background:${otherCol}"></span>Other`; key.appendChild(el); }
     }
   }
 
-  /* ---------- builders ---------- */
   function buildOverview(){ buildActiveGraph(); layoutOverview(); }
   function buildFocus(){
     buildActiveGraph();
-    const p = selParent.value;
-    if (!p){ layoutOverview(); return; }
-    const parent = nodes.find(n=> n.group==='parent' && n.label===p);
-    if (!parent){ layoutOverview(); return; }
-    const kids = links.filter(e=>e.source===parent).map(e=>e.target);
-    nodes = [parent, ...kids]; links = links.filter(e=> e.source===parent);
-    layoutFocusRing();
+    const p=selParent.value; if(!p){layoutOverview();return;}
+    const parent=nodes.find(n=>n.group==='parent' && n.label===p); if(!parent){layoutOverview();return;}
+    const kids=links.filter(e=>e.source===parent).map(e=>e.target);
+    nodes=[parent,...kids]; links=links.filter(e=>e.source===parent); layoutFocusRing();
   }
   function buildNetwork(){
     buildActiveGraph();
-    // keep top-N parents by degree & their children
-    const N = +countTop.value;
-    const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=> b.degree-a.degree).slice(0,N);
-    const keepP = new Set(parents.map(p=>p.id));
-    const childSet = new Set();
-    links = links.filter(e=>{ if (keepP.has(e.source.id)) { childSet.add(e.target.id); return true; } return false; });
-    nodes = [...parents, ...nodes.filter(n=> n.group==='child' && childSet.has(n.id))];
+    const N=+countTop.value;
+    const parents=nodes.filter(n=>n.group==='parent').sort((a,b)=>b.degree-a.degree).slice(0,N);
+    const keepP=new Set(parents.map(p=>p.id)), childSet=new Set();
+    links=links.filter(e=>{ if(keepP.has(e.source.id)){ childSet.add(e.target.id); return true; } return false; });
+    nodes=[...parents, ...nodes.filter(n=>n.group==='child' && childSet.has(n.id))];
     layoutAnchored();
   }
 
-  /* ---------- layouts ---------- */
-  function layout(){ if(mode==='overview') layoutOverview(); else if(mode==='focus') layoutFocusRing(); else layoutAnchored(); }
-
+  function layout(){ if(mode==='overview')layoutOverview(); else if(mode==='focus')layoutFocusRing(); else layoutAnchored(); }
   function layoutOverview(){
-    // grid by degree
     const cw=canvas.width,ch=canvas.height,pad=60,n=nodes.length; if(!n) return;
-    const cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
-    const cellW=(cw-pad*2)/cols, cellH=(ch-pad*2)/rows;
-    nodes.forEach((node,i)=>{ if(pinned.has(node.id)) return; const c=i%cols, r=Math.floor(i/cols); node.x=pad+c*cellW+cellW/2; node.y=pad+r*cellH+cellH/2; });
+    const cols=Math.ceil(Math.sqrt(n)),rows=Math.ceil(n/cols),cellW=(cw-pad*2)/cols,cellH=(ch-pad*2)/rows;
+    nodes.forEach((node,i)=>{ if(pinned.has(node.id)) return; const c=i%cols,r=Math.floor(i/cols); node.x=pad+c*cellW+cellW/2; node.y=pad+r*cellH+cellH/2; });
   }
   function layoutFocusRing(){
-    const cw=canvas.width,ch=canvas.height,cx=cw/2,cy=ch/2;
-    const parent=nodes.find(n=>n.group==='parent'); if(!parent) return;
+    const cw=canvas.width,ch=canvas.height,cx=cw/2,cy=ch/2; const parent=nodes.find(n=>n.group==='parent'); if(!parent) return;
     if(!pinned.has(parent.id)){ parent.x=cx; parent.y=cy; }
-    const kids=nodes.filter(n=>n.group==='child'); const TWO_PI=Math.PI*2;
-    const startR=140, ringGap=95, minSep=12;
-    function labelW(n){ return Math.min(220, measure.measureText(n.label||'').width); }
-    let ring=0, used=0, R=startR, start=Math.random()*TWO_PI;
-    const order=kids.slice().sort((a,b)=> (b.size||7)-(a.size||7));
-    for(const k of order){
-      let span = Math.max(2*(k.size||7), labelW(k)+minSep); let ang=span/R;
+    const kids=nodes.filter(n=>n.group==='child'), TWO_PI=Math.PI*2, startR=140, ringGap=95, minSep=12;
+    function labelW(n){return Math.min(220,measure.measureText(n.label||'').width);}
+    let ring=0,used=0,R=startR,start=Math.random()*TWO_PI;
+    for(const k of kids.slice().sort((a,b)=>(b.size||7)-(a.size||7))){
+      let span=Math.max(2*(k.size||7),labelW(k)+minSep), ang=span/R;
       while(used+ang>TWO_PI){ ring++; R=startR+ring*ringGap; used=0; ang=span/R; }
       if(!pinned.has(k.id)){ const t=start+used+ang/2; k.x=parent.x+R*Math.cos(t); k.y=parent.y+R*Math.sin(t); }
       used+=ang;
     }
   }
   function layoutAnchored(){
-    const cw=canvas.width,ch=canvas.height;
-    const spacing = +spacingInp.value, P = nodes.filter(n=>n.group==='parent').length;
+    const cw=canvas.width,ch=canvas.height, spacing=+spacingInp.value, P=nodes.filter(n=>n.group==='parent').length;
     const anchors=new Map(), TWO_PI=Math.PI*2, baseR=300, R=baseR*spacing;
-    const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=> b.degree-a.degree);
-    const layoutType = layoutSel.value;
+    const parents=nodes.filter(n=>n.group==='parent').sort((a,b)=>b.degree-a.degree);
+    const layoutType=layoutSel.value;
     if(layoutType==='grid'){
-      const cols=Math.ceil(Math.sqrt(P)), rows=Math.ceil(P/cols), cell=180*spacing;
-      const x0=-(cols-1)*cell/2, y0=-(rows-1)*cell/2;
-      parents.forEach((p,i)=> anchors.set(p.id,{x:x0+(i%cols)*cell,y:y0+Math.floor(i/cols)*cell}) );
+      const cols=Math.ceil(Math.sqrt(P)),rows=Math.ceil(P/cols),cell=180*spacing,x0=-(cols-1)*cell/2,y0=-(rows-1)*cell/2;
+      parents.forEach((p,i)=>anchors.set(p.id,{x:x0+(i%cols)*cell,y:y0+Math.floor(i/cols)*cell}));
     }else if(layoutType==='radial'){
-      parents.forEach((p,i)=>{ const t=(i/P)*TWO_PI; const norm=P>1?(1-i/(P-1)):1; const ring=R*(0.8+0.6*norm); anchors.set(p.id,{x:ring*Math.cos(t),y:ring*Math.sin(t)}); });
+      parents.forEach((p,i)=>{ const t=(i/P)*TWO_PI, norm=P>1?(1-i/(P-1)):1, ring=R*(0.8+0.6*norm); anchors.set(p.id,{x:ring*Math.cos(t),y:ring*Math.sin(t)}); });
     }else{
       parents.forEach((p,i)=>{ const t=(i/P)*TWO_PI; anchors.set(p.id,{x:R*Math.cos(t),y:R*Math.sin(t)}); });
     }
-    // place parents
     parents.forEach(p=>{ if(!pinned.has(p.id)){ p.x=cw/2+anchors.get(p.id).x; p.y=ch/2+anchors.get(p.id).y; } });
-    // children gather near their parent anchor with jitter
-    const childrenByParent = d3.group(links, d=>d.source.id);
-    for(const [pid, edges] of childrenByParent){
-      const anchor = anchors.get(pid); if(!anchor) continue;
-      const centerX = cw/2 + anchor.x, centerY = ch/2 + anchor.y;
-      const r0 = 90; let t=0;
-      for(const e of edges){
-        const c = e.target; if (pinned.has(c.id)) continue;
-        const rr = r0 + (Math.random()*45);
-        c.x = centerX + rr*Math.cos(t); c.y = centerY + rr*Math.sin(t);
-        t += (Math.PI*2)/Math.max(8, edges.length);
-      }
+    const childrenByParent=d3.group(links,d=>d.source.id);
+    for(const [pid,edges] of childrenByParent){
+      const a=anchors.get(pid); if(!a) continue; const cx=cw/2+a.x, cy=ch/2+a.y; const r0=90; let t=0;
+      for(const e of edges){ const c=e.target; if(pinned.has(c.id)) continue; const rr=r0+(Math.random()*45); c.x=cx+rr*Math.cos(t); c.y=cy+rr*Math.sin(t); t+=(Math.PI*2)/Math.max(8,edges.length); }
     }
   }
 
-  /* ---------- interactions ---------- */
+  /* interactions */
   function toGraph(sx,sy){ return [(sx-tx)/scale,(sy-ty)/scale]; }
-  function pick(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i],dx=x-n.x,dy=y-n.y,r=(n.size+6); if(dx*dx+dy*dy<=r*r) return n; } return null; }
+  function pick(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i],dx=x-n.x,dy=y-n.y,r=(n.size+6); if(dx*dx+dy*dy<=r*r) return n;} return null;}
   function showTip(n,sx,sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if(n.degree!=null) lines.push('Degree: '+n.degree); if(n.jur) lines.push('Jurisdiction: '+n.jur); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
   function hideTip(){ tip.style.display='none'; }
 
-  canvas.addEventListener('wheel', e=>{
-    const m=e.deltaY>0?0.9:1.1, before=toGraph(e.offsetX,e.offsetY); scale*=m; const after=toGraph(e.offsetX,e.offsetY);
-    tx+=(after[0]-before[0])*scale; ty+=(after[1]-before[1])*scale; e.preventDefault();
-  },{passive:false});
-
-  canvas.addEventListener('mousedown', e=>{
-    const [gx,gy]=toGraph(e.offsetX,e.offsetY); const hit=pick(gx,gy);
-    if(hit){ dragging=hit; dragOffset=[gx-hit.x, gy-hit.y]; showTip(hit,e.offsetX,e.offsetY);
-      if(mode==='overview' && hit.group==='parent'){ selParent.value=hit.label; buildFocus(); mode='focus'; fitScreen(); }
-    } else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
+  canvas.addEventListener('wheel',e=>{ const m=e.deltaY>0?0.9:1.1, before=toGraph(e.offsetX,e.offsetY); scale*=m; const after=toGraph(e.offsetX,e.offsetY); tx+=(after[0]-before[0])*scale; ty+=(after[1]-before[1])*scale; e.preventDefault(); },{passive:false});
+  canvas.addEventListener('mousedown',e=>{ const [gx,gy]=toGraph(e.offsetX,e.offsetY), hit=pick(gx,gy);
+    if(hit){ dragging=hit; dragOffset=[gx-hit.x,gy-hit.y]; showTip(hit,e.offsetX,e.offsetY); if(mode==='overview'&&hit.group==='parent'){ selParent.value=hit.label; buildFocus(); mode='focus'; fitScreen(); } }
+    else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
   });
-  window.addEventListener('mousemove', e=>{
+  window.addEventListener('mousemove',e=>{
     if(dragging){ const [gx,gy]=toGraph(e.offsetX,e.offsetY); if(!pinned.has(dragging.id)){ dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; } showTip(dragging,e.offsetX,e.offsetY); }
     else if(panning){ tx=panOrig[0]+(e.offsetX-panStart[0]); ty=panOrig[1]+(e.offsetY-panStart[1]); }
-    else { const [gx,gy]=toGraph(e.offsetX,e.offsetY); hover = pick(gx,gy); if(!hover) hideTip(); else showTip(hover,e.offsetX,e.offsetY); }
+    else { const [gx,gy]=toGraph(e.offsetX,e.offsetY); hover=pick(gx,gy); if(!hover) hideTip(); else showTip(hover,e.offsetX,e.offsetY); }
   });
-  window.addEventListener('mouseup', ()=>{ dragging=null; panning=false; });
-  canvas.addEventListener('dblclick', e=>{
-    const [gx,gy]=toGraph(e.offsetX,e.offsetY); const hit=pick(gx,gy); if(!hit) return;
-    if(pinned.has(hit.id)) pinned.delete(hit.id); else pinned.add(hit.id);
+  window.addEventListener('mouseup',()=>{ dragging=null; panning=false; });
+  canvas.addEventListener('dblclick',e=>{ const [gx,gy]=toGraph(e.offsetX,e.offsetY), hit=pick(gx,gy); if(!hit) return; if(pinned.has(hit.id)) pinned.delete(hit.id); else pinned.add(hit.id); });
+
+  document.getElementById('fit').addEventListener('click',fitScreen);
+  document.getElementById('mode-overview').addEventListener('click',()=>{mode='overview';buildOverview();fitScreen();});
+  document.getElementById('mode-focus').addEventListener('click',()=>{mode='focus';buildFocus();fitScreen();});
+  document.getElementById('mode-network').addEventListener('click',()=>{mode='network';buildNetwork();fitScreen();});
+  document.getElementById('rerun').addEventListener('click',()=>{ if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(); });
+
+  [selParent,countTop,layoutSel,spacingInp,parentMax,minDegInp,maxLabels,colorBySel,timeOn].forEach(el=>{
+    el.addEventListener('input',()=>{ if(!window.CURRENT) return; if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(false); });
   });
-
-  document.getElementById('fit').addEventListener('click', fitScreen);
-  document.getElementById('mode-overview').addEventListener('click', ()=>{ mode='overview'; buildOverview(); fitScreen(); });
-  document.getElementById('mode-focus').addEventListener('click', ()=>{ mode='focus'; buildFocus(); fitScreen(); });
-  document.getElementById('mode-network').addEventListener('click', ()=>{ mode='network'; buildNetwork(); fitScreen(); });
-  document.getElementById('rerun').addEventListener('click', ()=>{ if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(); });
-
-  [selParent, countTop, layoutSel, spacingInp, parentMax, minDegInp, maxLabels, colorBySel].forEach(el=>{
-    el.addEventListener('input', ()=>{ if(!window.CURRENT) return; if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(false); });
-  });
-
   [yearFrom,yearTo].forEach(el=>{
-    el.addEventListener('input', ()=>{ enforceRange(); updateRangeLabel(); if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(false); });
-  });
-  function enforceRange(){
-    if (+yearFrom.value > +yearTo.value) yearFrom.value = yearTo.value;
-  }
-
-  // Play animation
-  document.getElementById('play').addEventListener('click', ()=>{
-    if(animation){ clearInterval(animation); animation=null; document.getElementById('play').textContent='Play'; return; }
-    document.getElementById('play').textContent='Pause';
-    const min=+yearFrom.min, max=+yearTo.max;
-    yearFrom.value=min; yearTo.value=min; updateRangeLabel();
-    animation=setInterval(()=>{
-      let y=+yearTo.value + 1;
-      if (y>max){ clearInterval(animation); animation=null; document.getElementById('play').textContent='Play'; return; }
-      yearTo.value=y; if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); }, 400);
+    el.addEventListener('input',()=>{ if(+yearFrom.value>+yearTo.value) yearFrom.value=yearTo.value; updateRangeLabel(); if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); fitScreen(false); });
   });
 
-  // export PNG
-  document.getElementById('export').addEventListener('click', ()=>{
-    const url = canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='relationship-map.png'; a.click();
+  document.getElementById('play').addEventListener('click',()=>{
+    if(!timeOn.checked){ timeOn.checked=true; }
+    const min=+yearFrom.min,max=+yearTo.max; yearFrom.value=min; yearTo.value=min; updateRangeLabel();
+    let h=setInterval(()=>{ let y=+yearTo.value+1; if(y>max){clearInterval(h);return;} yearTo.value=y; if(mode==='overview')buildOverview(); else if(mode==='focus')buildFocus(); else buildNetwork(); },400);
   });
 
-  window.__graph_reload = () => { mode='overview'; pinned.clear(); buildOverview(); fitScreen(); requestAnimationFrame(draw); };
+  document.getElementById('export').addEventListener('click',()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='relationship-map.png'; a.click(); });
+
+  window.__graph_reload=()=>{ mode='overview'; pinned.clear(); buildOverview(); fitScreen(); requestAnimationFrame(draw); };
 
   function fitScreen(){
     if(!nodes.length) return;
@@ -629,79 +481,47 @@ document.getElementById('q').addEventListener('input', e=>{
     tx=cx-((minx+maxx)/2)*scale; ty=cy-((miny+maxy)/2)*scale;
   }
 
-  /* ---------- draw ---------- */
   function draw(){
-    const bg=getCss('--card','#FFF'); ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=getCss('--card','#FFF'); ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
 
-    // neighbor fade
     let neighborIds=null;
-    if(hover){
-      neighborIds=new Set([hover.id]);
-      for(const e of links){ const s=e.source.id, t=e.target.id; if(s===hover.id) neighborIds.add(t); if(t===hover.id) neighborIds.add(s); }
-    }
+    if(hover){ neighborIds=new Set([hover.id]); for(const e of links){ const s=e.source.id,t=e.target.id; if(s===hover.id) neighborIds.add(t); if(t===hover.id) neighborIds.add(s); } }
 
-    // curved edges (quadratic), width by weight
-    const drawLinks=(filter, alpha)=>{
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = linkCol();
-      for(const e of links){
-        if(filter && !filter(e)) continue;
-        const s=e.source, t=e.target;
-        const w = Math.max(0.6, Math.min(3.0, 0.6 + e.w*0.6));
-        ctx.lineWidth = Math.max(w/scale, 0.2);
-        const mx=(s.x*2 + t.x)/3, my=(s.y*2 + t.y)/3; // control towards parent
-        ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.quadraticCurveTo(mx,my,t.x,t.y); ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    };
-    if(hover){ drawLinks(null, 0.08); drawLinks(e=> (e.source.id===hover.id || e.target.id===hover.id), 1); }
-    else drawLinks(null, 1);
+    const drawLinks=(filter,alpha)=>{ ctx.globalAlpha=alpha; ctx.strokeStyle=linkCol();
+      for(const e of links){ if(filter && !filter(e)) continue;
+        const s=e.source,t=e.target,w=Math.max(0.6,Math.min(3.0,0.6+e.w*0.6)); ctx.lineWidth=Math.max(w/scale,0.2);
+        const mx=(s.x*2+t.x)/3,my=(s.y*2+t.y)/3; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.quadraticCurveTo(mx,my,t.x,t.y); ctx.stroke();
+      } ctx.globalAlpha=1; };
+    if(hover){ drawLinks(null,0.08); drawLinks(e=> (e.source.id===hover.id || e.target.id===hover.id),1); } else drawLinks(null,1);
 
-    // nodes
     for(const n of nodes){
-      const r=Math.max(n.size||7, 2/scale);
-      const dim = neighborIds ? !neighborIds.has(n.id) : false;
+      const r=Math.max(n.size||7,2/scale); const dim = neighborIds ? !neighborIds.has(n.id) : false;
       ctx.globalAlpha = dim ? 0.25 : 1;
-      ctx.beginPath(); ctx.fillStyle = n.color || (n.group==='parent'?parentCol():defaultChildCol());
+      ctx.beginPath(); ctx.fillStyle=n.color || (n.group==='parent'?parentCol():childCol());
       ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
-
-      // halo for parents (by degree)
-      if(n.group==='parent' && (n.degree||0)>0){
-        ctx.globalAlpha = dim ? 0.15 : 0.25;
-        ctx.beginPath(); ctx.strokeStyle = n.color; ctx.lineWidth = Math.max( (1 + n.degree*0.1)/scale, 0.5/scale );
-        ctx.arc(n.x,n.y,r+4/scale,0,Math.PI*2); ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
+      if(n.group==='parent'&&(n.degree||0)>0){ ctx.globalAlpha=dim?0.15:0.25; ctx.beginPath(); ctx.strokeStyle=n.color; ctx.lineWidth=Math.max((1+n.degree*0.1)/scale,0.5/scale); ctx.arc(n.x,n.y,r+4/scale,0,Math.PI*2); ctx.stroke(); }
+      ctx.globalAlpha=1;
     }
     ctx.restore();
 
-    // label culling by slider (top-K by importance)
-    const K = +maxLabels.value;
+    const K=+maxLabels.value;
     if(K>0){
-      const ranked = nodes.slice().sort((a,b)=>{
-        const gp = (a.group==='parent') - (b.group==='parent'); if(gp) return -gp;
-        const d = (b.degree||0)-(a.degree||0); if(d) return d; return a.label.localeCompare(b.label);
-      }).slice(0,K);
-      // anti-overlap packing
+      const ranked=nodes.slice().sort((a,b)=>{ const gp=(a.group==='parent')-(b.group==='parent'); if(gp) return -gp; const d=(b.degree||0)-(a.degree||0); if(d) return d; return a.label.localeCompare(b.label); }).slice(0,K);
       const placed=[]; ctx.save(); ctx.font=baseFont; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
-      for(const n of ranked){
-        const r=Math.max(n.size||7,2/scale), sx=n.x*scale+tx, sy=(n.y+r+4)*scale+ty, w=measure.measureText(n.label||'').width*scale, h=14*scale;
-        const x0=sx-w/2,y0=sy,x1=x0+w,y1=y0+h; let ok=true;
-        for(const b of placed){ if(x0<b.x1+2 && x1>b.x0-2 && y0<b.y1+2 && y1>b.y0-2){ ok=false; break; } }
-        if(ok){ placed.push({x0,y0,x1,y1}); ctx.fillText(n.label,sx,sy); }
+      for(const n of ranked){ const r=Math.max(n.size||7,2/scale), sx=n.x*scale+tx, sy=(n.y+r+4)*scale+ty, w=measure.measureText(n.label||'').width*scale, h=14*scale;
+        const x0=sx-w/2,y0=sy,x1=x0+w,y1=y0+h; let ok=true; for(const b of placed){ if(x0<b.x1+2 && x1>b.x0-2 && y0<b.y1+2 && y1>b.y0-2){ ok=false; break; } }
+        if(ok){ placed.push({x1,y1,x0,y0}); ctx.fillText(n.label,sx,sy); }
       }
       ctx.restore();
     }
-
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-
 })();
 </script>
 <script>
-/* utility exported earlier */
+document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
 function updateRangeLabel(){ const from=document.getElementById('year-from'), to=document.getElementById('year-to'), out=document.getElementById('yr-range'); if(from&&to&&out) out.textContent=`${from.value} – ${to.value}`; }
 </script>
 </body>
