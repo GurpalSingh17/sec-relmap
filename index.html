@@ -67,7 +67,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   <div class="row">
     <label for="file">Choose CSV</label><input id="file" type="file" accept=".csv,text/csv"/>
     <div id="drop">…or drop CSV here</div>
-    <span class="help">Needs <code>Parent Entity Name</code> and <code>Child Entity</code> (or <code>Issuer Name</code>).</span>
+    <span class="help">Loads the default CSV automatically. You can still upload a different one.</span>
   </div>
 
   <div class="tabs">
@@ -104,7 +104,6 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
       <input id="net-spacing" type="range" min="0.8" max="3.0" step="0.1" value="1.6">
     </label>
 
-    <!-- NEW: controls max parent radius -->
     <label class="pill">Parent size (max)
       <input id="parent-size" type="range" min="12" max="48" step="1" value="28">
     </label>
@@ -116,7 +115,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 </header>
 
 <main>
-  <section id="view-list" class="view active section"><div class="help">Load a CSV to see grouped results.</div></section>
+  <section id="view-list" class="view active section"><div class="help">Loading…</div></section>
 
   <section id="view-graph" class="view section">
     <div id="graph-wrap">
@@ -134,6 +133,10 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
 <script>
 document.getElementById('gen-ts').textContent = new Date().toISOString().slice(0,19).replace('T',' ');
+
+/* ---------- default CSV in repo ---------- */
+/* Change this if you replace/rename the CSV in the repo root */
+const DEFAULT_CSV = 's5_ok_2025-08-25_15-06-23.csv';
 
 /* ---------- tabs ---------- */
 const tabs = document.querySelectorAll('.tab');
@@ -167,6 +170,24 @@ function loadFile(file){
     error: (err) => alert("CSV parse error: " + err)
   });
 }
+
+/* Load by URL (for the hardcoded repo CSV) */
+function loadUrl(url){
+  Papa.parse(url, {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: h => (h||"").trim(),
+    complete: (res) => handleData(res.meta.fields, res.data),
+    error: (err) => alert("CSV fetch/parse error: " + err)
+  });
+}
+
+/* Auto-load the repo CSV on first paint */
+document.addEventListener('DOMContentLoaded', () => {
+  // Relative path keeps it working at /<user>.github.io/<repo>/
+  loadUrl(DEFAULT_CSV);
+});
 
 /* ---------- data prep ---------- */
 let CURRENT = null;
@@ -305,7 +326,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
   measure.font = baseFont;
 
   let nodes=[], links=[], mode='overview', scale=1, tx=0, ty=0, dragging=null, panning=false, dragOffset=[0,0], panStart=[0,0], panOrig=[0,0];
-  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); layout(); });
   window.__graph_on_activate=()=>{ resize(); };
@@ -314,8 +334,8 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
 
   /* ---- Parent size scaling (linear by degree) ---- */
   function parentSizeScale(counts){
-    const maxR = +document.getElementById('parent-size').value || 28;   // max radius from slider
-    const minR = 6;                                                     // min radius for parents
+    const maxR = +document.getElementById('parent-size').value || 28;
+    const minR = 6;
     const minC = d3.min(counts) ?? 0, maxC = d3.max(counts) ?? 1;
     if (maxC === minC) return ()=> (minR + maxR)/2;
     const span = maxC - minC;
@@ -453,7 +473,6 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
       if(mode==='network'){ const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
     });
   });
-  // Recompute sizes live when slider moves
   document.getElementById('parent-size').addEventListener('input', ()=>{
     if(!window.__DATA) return;
     if(mode==='overview'){ buildOverview(); fitScreen(); }
