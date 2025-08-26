@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>Relationship Map — SEC CSV Viewer</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Relationship Map — CSV Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
 
 <!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -17,15 +17,16 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:blur(6px);z-index:3}
 h1{margin:0 0 6px;font-size:20px}
 .small{color:var(--muted);font-size:13px}
-.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center}
+
+header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.92));backdrop-filter:blur(6px);z-index:3}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center}
 button,.pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 button:hover{border-color:var(--accent)}
 input[type="file"]{display:none}
 label[for="file"]{padding:8px 12px;border-radius:10px;border:1px dashed var(--line);background:#fff;cursor:pointer}
-#drop{border:1px dashed var(--line);border-radius:12px;background:#fff;padding:10px 12px}
+#drop{border:1px dashed var(--line);border-radius:12px;background:#fff;padding:8px 12px}
 .help{color:var(--muted);font-size:12px}
 .tabs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .tab{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
@@ -49,14 +50,20 @@ th{text-align:left;color:#474B4E;position:sticky;top:118px;background:var(--card
 td.src a{color:#0B6DAA;text-decoration:none}
 .hidden{display:none !important}
 footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
-#graph-wrap{height:calc(100vh - 260px);position:relative;border-top:1px solid var(--line);margin-top:10px}
+#graph-wrap{height:calc(100vh - 320px);position:relative;border-top:1px solid var(--line);margin-top:8px}
 #graph{width:100%;height:100%;background:#FFF}
 .legend{position:absolute;left:12px;top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.dot.parent{background:var(--parent)} .dot.child{background:var(--child)}
+.dot.parent{background:var(--parent)}
+.dot.child{background:var(--child)}
 .tooltip{position:absolute;background:#fff;color:var(--ink);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;display:none;z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.08)}
-#graph-controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
-.mode-pill{border-color:var(--accent)}
+.pill strong{margin-right:6px}
+
+.hist{display:flex;align-items:center;gap:8px}
+#hist{width:260px;height:48px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.color-key{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.key-item{display:flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:12px}
+.key-box{width:12px;height:12px;border-radius:3px}
 </style>
 </head>
 <body>
@@ -67,7 +74,7 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
   <div class="row">
     <label for="file">Choose CSV</label><input id="file" type="file" accept=".csv,text/csv"/>
     <div id="drop">…or drop CSV here</div>
-    <span class="help">Needs <code>Parent Entity Name</code> and <code>Child Entity</code> (or <code>Issuer Name</code>).</span>
+    <span class="help">Needs <code>Parent Entity Name</code>, <code>Child Entity</code> (or <code>Issuer Name</code>), <code>Filing Date</code>. <em>Jurisdiction</em> optional.</span>
   </div>
 
   <div class="tabs">
@@ -75,18 +82,19 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
     <button class="tab" data-target="#view-graph">Graph view</button>
   </div>
 
+  <!-- LIST controls -->
   <div class="controls" id="list-controls">
     <input id="q" type="search" placeholder="Search parent name…"/>
     <button id="expand">Expand all</button>
     <button id="collapse">Collapse all</button>
-    <span class="help">No data leaves your browser.</span>
   </div>
 
+  <!-- GRAPH controls -->
   <div id="graph-controls" class="controls" style="display:none">
-    <span class="pill mode-pill">Mode:</span>
+    <span class="pill"><strong>Mode</strong></span>
     <button id="mode-overview" class="pill">Overview</button>
     <button id="mode-focus" class="pill">Focus parent</button>
-    <button id="mode-network" class="pill">Network (clustered)</button>
+    <button id="mode-network" class="pill">Network</button>
 
     <label class="pill">Top parents
       <select id="net-count"><option>20</option><option selected>50</option><option>100</option><option>200</option></select>
@@ -104,14 +112,46 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
       <input id="net-spacing" type="range" min="0.8" max="3.0" step="0.1" value="1.6">
     </label>
 
-    <!-- NEW: controls max parent radius -->
     <label class="pill">Parent size (max)
       <input id="parent-size" type="range" min="12" max="48" step="1" value="28">
+    </label>
+
+    <label class="pill">Min degree
+      <input id="min-degree" type="range" min="0" max="10" step="1" value="0">
+    </label>
+
+    <label class="pill">Max labels
+      <input id="max-labels" type="range" min="0" max="300" step="10" value="120">
+    </label>
+
+    <label class="pill">Color children by
+      <select id="color-by">
+        <option value="jurisdiction" selected>Jurisdiction</option>
+        <option value="single">Single color</option>
+      </select>
     </label>
 
     <select id="parent-select" title="Choose parent (Focus mode)"></select>
     <button id="rerun">Re-run layout</button>
     <button id="fit">Fit</button>
+    <button id="export">Export PNG</button>
+  </div>
+
+  <!-- TIME FILTER -->
+  <div id="time-controls" class="controls" style="display:none">
+    <span class="pill"><strong>Time</strong></span>
+    <div class="hist">
+      <canvas id="hist"></canvas>
+      <button id="play">Play</button>
+    </div>
+    <label class="pill">From
+      <input id="year-from" type="range" min="2000" max="2030" step="1" value="2000">
+    </label>
+    <label class="pill">To
+      <input id="year-to" type="range" min="2000" max="2030" step="1" value="2030">
+    </label>
+    <div class="pill">Range: <span id="yr-range"></span></div>
+    <div class="color-key" id="jur-key"></div>
   </div>
 </header>
 
@@ -129,7 +169,6 @@ footer{padding:12px 18px;color:var(--muted);border-top:1px solid var(--line)}
 
 <footer>
   Generated <span id="gen-ts"></span>
-  · Last push: <span id="gh-push">loading…</span>
 </footer>
 
 <script>
@@ -146,6 +185,7 @@ tabs.forEach(t => t.addEventListener('click', () => {
   const onGraph = (t.dataset.target==="#view-graph");
   document.getElementById('list-controls').style.display = onGraph ? "none" : "flex";
   document.getElementById('graph-controls').style.display = onGraph ? "flex" : "none";
+  document.getElementById('time-controls').style.display = onGraph ? "flex" : "none";
   if (onGraph && window.__graph_on_activate) window.__graph_on_activate();
 }));
 
@@ -177,341 +217,393 @@ function pickCol(cols, ...cands){
   for (const c of cands){ const k=(c||'').toLowerCase().replace(/\s+/g,''); if (compact[k]) return compact[k]; }
   return null;
 }
+const parseYear = (s) => {
+  if (!s) return null;
+  const m = String(s).match(/(\d{4})/); return m ? +m[1] : null;
+};
 
 function handleData(headers, rows){
-  const col_parent_name = pickCol(headers,"Parent Entity Name");
-  const col_parent_cik  = pickCol(headers,"Parent Entity CIK");
-  const col_child       = pickCol(headers,"Child Entity","Issuer Name");
-  const col_child_cik   = pickCol(headers,"Child Entity CIK","CIK");
-  const col_entity_type = pickCol(headers,"Entity Type");
-  const col_industry    = pickCol(headers,"Industry Group");
-  const col_juris       = pickCol(headers,"Jurisdiction");
-  const col_date        = pickCol(headers,"Filing Date","signatureDate");
-  const col_clar        = pickCol(headers,"Clarification","relationshipClarification");
-  const col_source      = pickCol(headers,"Source File");
-  if (!col_parent_name || !col_child){ alert("Missing headers. Need 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name')."); return; }
+  const col_parent = pickCol(headers,"Parent Entity Name");
+  const col_child  = pickCol(headers,"Child Entity","Issuer Name");
+  const col_date   = pickCol(headers,"Filing Date","signatureDate","Date");
+  const col_juris  = pickCol(headers,"Jurisdiction");
+  if (!col_parent || !col_child){ alert("Missing headers. Need 'Parent Entity Name' and 'Child Entity' (or 'Issuer Name')."); return; }
 
+  // Build edge-year list: key = P|<parent>||C|<child> → {years:[], juris:[]}
+  const edgeYears = new Map();
+  const parentsSet = new Set(), childrenSet = new Set();
+  const filingsPerYear = new Map();
+
+  for (const r of rows){
+    const p = (r[col_parent]||"").trim(); const c = (r[col_child]||"").trim();
+    if (!p || !c) continue;
+    const y = parseYear(r[col_date]); if (y!=null) filingsPerYear.set(y,(filingsPerYear.get(y)||0)+1);
+    const key = "P|"+p+"||C|"+c;
+    const rec = edgeYears.get(key) || { parent:p, child:c, years:[], juris:[] };
+    if (y!=null) rec.years.push(y);
+    const j = (r[col_juris]||"").trim(); if (j) rec.juris.push(j);
+    edgeYears.set(key, rec);
+    parentsSet.add(p); childrenSet.add(c);
+  }
+
+  // years
+  const years = Array.from(filingsPerYear.keys()).sort((a,b)=>a-b);
+  const minYear = years.length ? years[0] : 2000;
+  const maxYear = years.length ? years[years.length-1] : new Date().getFullYear();
+
+  CURRENT = { edgeYears, parentsSet, childrenSet, years, minYear, maxYear, col_juris: !!col_juris };
+  document.getElementById('stat-parents').textContent = parentsSet.size;
+  document.getElementById('stat-links').textContent = edgeYears.size;
+
+  // list view (group by parent)
   const byParent = new Map();
   for (const r of rows){
-    const p = (r[col_parent_name]||"").trim();
-    const c = (r[col_child]||"").trim();
-    if (!p || !c) continue;
-    const rec = {
-      child:c, child_cik:(r[col_child_cik]||"").trim(),
-      etype:(r[col_entity_type]||"").trim(),
-      industry:(r[col_industry]||"").trim(),
-      juris:(r[col_juris]||"").trim(),
+    const p = (r[col_parent]||"").trim(); const c = (r[col_child]||"").trim(); if(!p||!c) continue;
+    if (!byParent.has(p)) byParent.set(p, []);
+    byParent.get(p).push({
+      child:c,
       date:(r[col_date]||"").trim(),
-      clar:(r[col_clar]||"").trim(),
-      src:(r[col_source]||"").trim()
-    };
-    if (!byParent.has(p)) byParent.set(p,{parent:p,parent_cik:(r[col_parent_cik]||"").trim(),children:[]});
-    byParent.get(p).children.push(rec);
+      juris: (r[col_juris]||"").trim()
+    });
   }
+  const groups = Array.from(byParent.entries()).map(([parent, children])=>({
+    parent, count: children.length,
+    children: children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))
+  })).sort((a,b)=> b.count-a.count || a.parent.localeCompare(b.parent));
 
-  const groups = Array.from(byParent.values())
-    .map(g => ({...g, count:g.children.length, children:g.children.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:a.child.localeCompare(b.child)))}))
-    .sort((a,b)=> b.count - a.count || a.parent.localeCompare(b.parent));
+  document.getElementById('view-list').innerHTML =
+    groups.map(g=>`<details class="card"><summary><span class="parent-name">${escapeHtml(g.parent)}</span> <span class="badge">${g.count}</span></summary>
+      <div class="inner"><table><thead><tr><th>Child Entity</th><th>Filing Date</th><th>Jurisdiction</th></tr></thead>
+        <tbody>${g.children.map(r=>`<tr><td>${escapeHtml(r.child)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.juris)}</td></tr>`).join('')}</tbody>
+      </table></div></details>`).join('');
 
-  document.getElementById('stat-parents').textContent = groups.length;
-  document.getElementById('stat-links').textContent = rows.length;
-
-  // list render
-  document.getElementById('view-list').innerHTML = groups.map(renderGroup).join('');
-  window.cards = Array.from(document.querySelectorAll('.card'));
-  const q = document.getElementById('q'); q.value=''; q.dispatchEvent(new Event('input'));
-
-  // graph data
-  const nodes = {};
-  const linksMap = new Map();
-  const nk = (kind,name)=> kind + "|" + (name||"").trim();
-
-  for (const g of groups){
-    const pk = nk("P", g.parent);
-    if (!nodes[pk]) nodes[pk] = { id:pk, label:g.parent, group:"parent", cik:g.parent_cik||"", count:g.count };
-    for (const ch of g.children){
-      const ck = nk("C", ch.child);
-      if (!nodes[ck]) nodes[ck] = { id:ck, label:ch.child, group:"child", cik:ch.child_cik||"" };
-      linksMap.set(pk+"||"+ck, (linksMap.get(pk+"||"+ck)||0)+1);
-    }
-  }
-  const links = Array.from(linksMap.entries()).map(([k,cnt])=>{
-    const [pk,ck] = k.split("||"); return { source:pk, target:ck, count:cnt };
-  });
-
-  CURRENT = { groups, nodes:Object.values(nodes), links };
-
-  // parent dropdown (focus)
+  // focus dropdown
   const sel = document.getElementById('parent-select');
-  sel.innerHTML = `<option value="">— choose parent —</option>` + groups.map(g => `<option>${escapeHtml(g.parent)}</option>`).join('');
+  sel.innerHTML = `<option value="">— choose parent —</option>` + Array.from(parentsSet).sort().map(p => `<option>${escapeHtml(p)}</option>`).join('');
 
-  if (window.__graph_reload) window.__graph_reload(CURRENT);
+  // time controls
+  const yrFrom = document.getElementById('year-from'), yrTo = document.getElementById('year-to');
+  yrFrom.min = minYear; yrFrom.max = maxYear; yrFrom.value = minYear;
+  yrTo.min = minYear; yrTo.max = maxYear; yrTo.value = maxYear;
+  updateRangeLabel();
+
+  drawHistogram(filingsPerYear, minYear, maxYear);
+
+  if (window.__graph_reload) window.__graph_reload();
 }
 
+/* ----- histogram mini chart ----- */
+function drawHistogram(counts, minYear, maxYear){
+  const cvs=document.getElementById('hist'), ctx=cvs.getContext('2d');
+  const w=cvs.width=260, h=cvs.height=48; ctx.clearRect(0,0,w,h);
+  const years = d3.range(minYear, maxYear+1);
+  const maxV = d3.max(years.map(y=>counts.get(y)||0)) || 1;
+  const barW = Math.max(1, Math.floor(w/years.length));
+  ctx.fillStyle="#eee"; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle="#bbb";
+  years.forEach((y,i)=>{ const v=(counts.get(y)||0); const bh = Math.round(v/maxV*(h-6)); ctx.fillRect(i*barW, h-bh, barW-1, bh); });
+}
+
+/* ---------- list helpers ---------- */
 function escapeHtml(s){return (s||"").replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function renderRow(r){
-  const link = r.src ? `<a href="${escapeHtml(r.src)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.src)}</a>` : "";
-  return `<tr>
-    <td>${escapeHtml(r.child)}</td><td>${escapeHtml(r.child_cik)}</td>
-    <td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.juris)}</td>
-    <td>${escapeHtml(r.etype)}</td><td>${escapeHtml(r.industry)}</td>
-    <td>${escapeHtml(r.clar)}</td><td class="src">${link}</td>
-  </tr>`;
-}
-function renderGroup(g){
-  const rows = g.children.map(renderRow).join('');
-  const cik  = g.parent_cik ? ` · <span class="cik">CIK: ${escapeHtml(g.parent_cik)}</span>` : '';
-  return `
-<details class="card" data-parent="${escapeHtml(g.parent).toUpperCase()}">
-  <summary><span class="parent-name">${escapeHtml(g.parent)}</span>${cik} <span class="badge">${g.count}</span></summary>
-  <div class="inner">
-    <table>
-      <thead>
-        <tr>
-          <th>Child Entity</th><th>Child CIK</th><th>Filing Date</th><th>Jurisdiction</th>
-          <th>Entity Type</th><th>Industry Group</th><th>Clarification</th><th>Source</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>
-</details>`;
-}
-const q = document.getElementById('q');
-q.addEventListener('input', ()=>{
-  const term = (q.value||'').trim().toUpperCase();
-  let shown = 0;
-  for (const c of (window.cards||[])){
-    const name = c.dataset.parent || '';
-    const hit = !term || name.includes(term);
-    c.classList.toggle('hidden', !hit);
-    if (hit) shown++;
-  }
-  document.getElementById('stat-parents').textContent = shown || (CURRENT ? CURRENT.groups.length : 0);
+document.getElementById('expand').addEventListener('click', ()=>{ document.querySelectorAll('#view-list details').forEach(d=>d.open=true); });
+document.getElementById('collapse').addEventListener('click', ()=>{ document.querySelectorAll('#view-list details').forEach(d=>d.open=false); });
+document.getElementById('q').addEventListener('input', e=>{
+  const t=(e.target.value||'').trim().toUpperCase();
+  document.querySelectorAll('#view-list .card').forEach(card=>{
+    const name=(card.querySelector('.parent-name')?.textContent||'').toUpperCase();
+    card.classList.toggle('hidden', t && !name.includes(t));
+  });
 });
-document.getElementById('expand').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = true; });
-document.getElementById('collapse').addEventListener('click', ()=>{ for (const c of (window.cards||[])) c.open = false; });
-</script>
 
-<script>
-/* ===== Graph (Overview + Focus + Network) ===== */
+/* ============================================================
+   Graph
+============================================================ */
 (function(){
   const canvas = document.getElementById('graph');
   const ctx = canvas.getContext('2d', { alpha:false });
   const tip = document.getElementById('tip');
-
   const measure = document.createElement('canvas').getContext('2d');
   const baseFont = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
   measure.font = baseFont;
 
-  let nodes=[], links=[], mode='overview', scale=1, tx=0, ty=0, dragging=null, panning=false, dragOffset=[0,0], panStart=[0,0], panOrig=[0,0];
-  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  let nodes=[], links=[], mode='overview';
+  let scale=1, tx=0, ty=0, dragging=null, panning=false, dragOffset=[0,0], panStart=[0,0], panOrig=[0,0];
+  let hover=null, pinned=new Set();
+  let animation=null;
+
+  const getCss=(v,def)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim()||def;
+  const parentCol=()=>getCss('--parent','#D04A02');
+  const defaultChildCol=()=>getCss('--child','#00A3A1');
+  const linkCol=()=>getCss('--link','#C8C4BE');
+
   function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
   window.addEventListener('resize', ()=>{ resize(); layout(); });
   window.__graph_on_activate=()=>{ resize(); };
 
-  window.__graph_reload = (data) => { window.__DATA=data; mode='overview'; buildOverview(); fitScreen(); };
+  // UI references
+  const selParent = document.getElementById('parent-select');
+  const countTop   = document.getElementById('net-count');
+  const layoutSel  = document.getElementById('net-layout');
+  const spacingInp = document.getElementById('net-spacing');
+  const parentMax  = document.getElementById('parent-size');
+  const minDegInp  = document.getElementById('min-degree');
+  const maxLabels  = document.getElementById('max-labels');
+  const colorBySel = document.getElementById('color-by');
+  const yearFrom = document.getElementById('year-from');
+  const yearTo   = document.getElementById('year-to');
+  const rangeLbl = document.getElementById('yr-range');
+  function updateRangeLabel(){ rangeLbl.textContent = `${yearFrom.value} – ${yearTo.value}`; }
+  window.updateRangeLabel = updateRangeLabel;
 
-  /* ---- Parent size scaling (linear by degree) ---- */
-  function parentSizeScale(counts){
-    const maxR = +document.getElementById('parent-size').value || 28;   // max radius from slider
-    const minR = 6;                                                     // min radius for parents
+  // Domain colors for Jurisdiction
+  const JUR_PALETTE = d3.schemeTableau10.concat(["#A569BD","#F5B041","#16A085","#5D6D7E","#CA6F1E","#8E44AD"]);
+  function colorForJur(jur, map){
+    if (!map || jur==null) return defaultChildCol();
+    return map.get(jur) || defaultChildCol();
+  }
+
+  /* ---- active graph rebuild based on time + min-degree + color mapping ---- */
+  function buildActiveGraph(){
+    if (!window.CURRENT) return;
+    const eY = window.CURRENT.edgeYears;
+    const Y0 = +yearFrom.value, Y1 = +yearTo.value;
+    const within = (arr)=> arr.some(y=> y>=Y0 && y<=Y1);
+
+    // build edges (weight = count of years in window)
+    const edges=[], parentDeg=new Map(), childDeg=new Map();
+    const childJurCount = new Map(); // child → Map(jur→count) to choose dominant color
+    for (const rec of eY.values()){
+      const yearsIn = rec.years.filter(y=> y>=Y0 && y<=Y1);
+      if (!yearsIn.length) continue;
+      const w = yearsIn.length;
+      edges.push({ p:rec.parent, c:rec.child, w, jurisList:rec.juris });
+      parentDeg.set(rec.parent, (parentDeg.get(rec.parent)||0) + 1);
+      childDeg.set(rec.child, (childDeg.get(rec.child)||0) + 1);
+      if (rec.juris && rec.juris.length){
+        const m = childJurCount.get(rec.child) || new Map();
+        rec.juris.forEach(j=> m.set(j,(m.get(j)||0)+1));
+        childJurCount.set(rec.child, m);
+      }
+    }
+
+    // min-degree filter
+    const minD = +minDegInp.value;
+    const keepParents = new Set(Array.from(parentDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
+    const keepChildren = new Set(Array.from(childDeg.entries()).filter(([k,v])=>v>=minD).map(([k])=>k));
+
+    // nodes
+    const parents = Array.from(keepParents).map(p=>({ id:"P|"+p, label:p, group:"parent", degree:parentDeg.get(p)||0 }));
+    const children = Array.from(keepChildren).map(c=>{
+      const jurMap = childJurCount.get(c);
+      let best=null, bestN=-1;
+      if (jurMap) for (const [j,n] of jurMap) if (n>bestN){ best=j; bestN=n; }
+      return { id:"C|"+c, label:c, group:"child", degree:childDeg.get(c)||0, jur:(best||null) };
+    });
+
+    const parentSizeFn = sizeScale(parents.map(p=>p.degree));
+    parents.forEach(p=> p.size = parentSizeFn(p.degree));
+    children.forEach(c=> c.size = 5);
+
+    // edges (respect node filter)
+    const idSet = new Set([...parents.map(n=>n.id), ...children.map(n=>n.id)]);
+    const linkObjs=[];
+    for (const e of edges){
+      if (!keepParents.has(e.p) || !keepChildren.has(e.c)) continue;
+      linkObjs.push({ source:"P|"+e.p, target:"C|"+e.c, w:e.w });
+    }
+
+    // jurisdiction legend mapping
+    let jurDomain = [];
+    if (colorBySel.value==='jurisdiction'){
+      jurDomain = Array.from(new Set(children.map(n=>n.jur).filter(Boolean))).slice(0, JUR_PALETTE.length-1);
+    }
+    const jurColorMap = new Map(jurDomain.map((j,i)=> [j, JUR_PALETTE[i]]));
+    const otherColor = JUR_PALETTE[JUR_PALETTE.length-1];
+
+    // key legend
+    const key = document.getElementById('jur-key'); key.innerHTML='';
+    if (colorBySel.value==='jurisdiction'){
+      for (const j of jurDomain){
+        const el = document.createElement('div'); el.className='key-item';
+        el.innerHTML = `<span class="key-box" style="background:${jurColorMap.get(j)}"></span>${escapeHtml(j)}`;
+        key.appendChild(el);
+      }
+      if (children.some(n=>!n.jur || !jurColorMap.get(n.jur))){
+        const el = document.createElement('div'); el.className='key-item';
+        el.innerHTML = `<span class="key-box" style="background:${otherColor}"></span>Other`;
+        key.appendChild(el);
+      }
+    }
+
+    // materialize nodes map
+    const nodeMap = new Map([...parents, ...children].map(n=>[n.id,n]));
+    nodes = Array.from(nodeMap.values());
+    links = linkObjs.map(l=>({ source:nodeMap.get(l.source), target:nodeMap.get(l.target), w:l.w }));
+
+    // attach a per-child color
+    for (const n of nodes){
+      if (n.group==='child'){
+        if (colorBySel.value==='jurisdiction'){
+          n.color = n.jur && jurColorMap.get(n.jur) ? jurColorMap.get(n.jur) : otherColor;
+        } else n.color = defaultChildCol();
+      } else n.color = parentCol();
+    }
+  }
+
+  function sizeScale(counts){
+    const maxR = +parentMax.value || 28, minR = 6;
     const minC = d3.min(counts) ?? 0, maxC = d3.max(counts) ?? 1;
-    if (maxC === minC) return ()=> (minR + maxR)/2;
-    const span = maxC - minC;
-    return (c)=> minR + ((c - minC) / span) * (maxR - minR);
+    if (maxC===minC) return ()=> (minR + maxR)/2;
+    const span = maxC-minC;
+    return (c)=> minR + ((c - minC)/span) * (maxR - minR);
   }
 
   /* ---------- builders ---------- */
-  function buildOverview(){
-    const parents = window.__DATA.nodes.filter(n=>n.group==='parent');
-    const sizeFn = parentSizeScale(parents.map(p=>p.count||0));
-    const mapped = parents
-      .sort((a,b)=> b.count - a.count || a.label.localeCompare(b.label))
-      .map(n => ({ ...n, size: sizeFn(n.count||0) }));
-    nodes = mapped; links = []; layoutOverview();
+  function buildOverview(){ buildActiveGraph(); layoutOverview(); }
+  function buildFocus(){
+    buildActiveGraph();
+    const p = selParent.value;
+    if (!p){ layoutOverview(); return; }
+    const parent = nodes.find(n=> n.group==='parent' && n.label===p);
+    if (!parent){ layoutOverview(); return; }
+    const kids = links.filter(e=>e.source===parent).map(e=>e.target);
+    nodes = [parent, ...kids]; links = links.filter(e=> e.source===parent);
+    layoutFocusRing();
   }
-
-  function buildFocus(parentLabel){
-    const p = window.__DATA.nodes.find(n=>n.group==='parent' && n.label===parentLabel);
-    if (!p){ buildOverview(); return; }
-    const allParents = window.__DATA.nodes.filter(n=>n.group==='parent');
-    const sizeFn = parentSizeScale(allParents.map(x=>x.count||0));
-    const childrenIds = new Set(window.__DATA.links.filter(e=>e.source===("P|"+parentLabel)).map(e=>e.target));
-    const kids = window.__DATA.nodes.filter(n=>childrenIds.has(n.id));
-    nodes = [{...p, size:sizeFn(p.count||0)}, ...kids.map(k=>({...k, size:5}))];
-    links = kids.map(k=>({source:nodes[0], target:k, w:1}));
-    layoutFocusNoOverlap();
-  }
-
-  let sim=null;
-  function buildNetwork(topN, spacing, layoutType){
-    sim && sim.stop();
-    const parents = window.__DATA.groups.slice(0, topN);
-    const sizeFn = parentSizeScale(parents.map(g=>g.count||0));
-
-    const nodeMap=new Map(), edges=[];
-    const getNode=(id,label,group,size,cik,count,clusterId)=>{
-      if(!nodeMap.has(id)) nodeMap.set(id,{id,label,group,size,cik,count,clusterId});
-      return nodeMap.get(id);
-    };
-    for (const g of parents){
-      const pid="P|"+g.parent;
-      const p=getNode(pid,g.parent,"parent",sizeFn(g.count||0),g.parent_cik||"",g.count,pid);
-      for (const ch of g.children){
-        const cid="C|"+ch.child;
-        const c=getNode(cid,ch.child,"child",5,ch.child_cik||"",1,pid);
-        edges.push({source:p.id,target:c.id});
-      }
-    }
-    const simNodes=Array.from(nodeMap.values()), simLinks=edges;
-
-    // anchors
-    const P=parents.length||1, TWO_PI=Math.PI*2, baseRadius=300, R=baseRadius*spacing, anchors=new Map();
-    const parentIds=parents.map(g=>"P|"+g.parent);
-    if (layoutType==='grid'){
-      const cols=Math.ceil(Math.sqrt(P)), rows=Math.ceil(P/cols), cell=180*spacing;
-      const x0=-(cols-1)*cell/2, y0=-(rows-1)*cell/2;
-      parentIds.forEach((pid,i)=>{ const c=i%cols, r=Math.floor(i/cols); anchors.set(pid,{x:x0+c*cell,y:y0+r*cell}); });
-    }else if (layoutType==='radial'){
-      const ranked=parents.map(g=>({id:"P|"+g.parent,count:g.count})).sort((a,b)=>b.count-a.count);
-      ranked.forEach((it,i)=>{ const t=(i/P)*TWO_PI; const norm=P>1?(1-i/(P-1)):1; const ring=R*(0.8+0.6*norm); anchors.set(it.id,{x:ring*Math.cos(t),y:ring*Math.sin(t)}); });
-    }else{
-      parentIds.forEach((pid,i)=>{ const t=(i/P)*TWO_PI; anchors.set(pid,{x:R*Math.cos(t),y:R*Math.sin(t)}); });
-    }
-
-    sim=d3.forceSimulation(simNodes)
-      .force('link', d3.forceLink(simLinks).id(d=>d.id).distance(d=>d.target.group==='child'?28:40).strength(0.6))
-      .force('charge', d3.forceManyBody().strength(-35))
-      .force('collide', d3.forceCollide().radius(d=>(d.size||6)+4))
-      .force('x', d3.forceX(d=> (anchors.get(d.clusterId)||{x:0}).x).strength(d=>d.group==='parent'?0.95:0.35))
-      .force('y', d3.forceY(d=> (anchors.get(d.clusterId)||{y:0}).y).strength(d=>d.group==='parent'?0.95:0.35))
-      .force('center', d3.forceCenter(0,0))
-      .stop();
-    for(let i=0;i<350;i++) sim.tick();
-
-    nodes=simNodes;
-    links=simLinks.map(l=>({source:nodeMap.get(l.source.id||l.source), target:nodeMap.get(l.target.id||l.target)}));
+  function buildNetwork(){
+    buildActiveGraph();
+    // keep top-N parents by degree & their children
+    const N = +countTop.value;
+    const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=> b.degree-a.degree).slice(0,N);
+    const keepP = new Set(parents.map(p=>p.id));
+    const childSet = new Set();
+    links = links.filter(e=>{ if (keepP.has(e.source.id)) { childSet.add(e.target.id); return true; } return false; });
+    nodes = [...parents, ...nodes.filter(n=> n.group==='child' && childSet.has(n.id))];
+    layoutAnchored();
   }
 
   /* ---------- layouts ---------- */
-  function layout(){ if(mode==='overview') layoutOverview(); else if(mode==='focus') layoutFocusNoOverlap(); }
+  function layout(){ if(mode==='overview') layoutOverview(); else if(mode==='focus') layoutFocusRing(); else layoutAnchored(); }
+
   function layoutOverview(){
+    // grid by degree
     const cw=canvas.width,ch=canvas.height,pad=60,n=nodes.length; if(!n) return;
     const cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
     const cellW=(cw-pad*2)/cols, cellH=(ch-pad*2)/rows;
-    nodes.forEach((node,i)=>{ const c=i%cols, r=Math.floor(i/cols); node.x=pad+c*cellW+cellW/2+(Math.random()-0.5)*4; node.y=pad+r*cellH+cellH/2+(Math.random()-0.5)*4; });
+    nodes.forEach((node,i)=>{ if(pinned.has(node.id)) return; const c=i%cols, r=Math.floor(i/cols); node.x=pad+c*cellW+cellW/2; node.y=pad+r*cellH+cellH/2; });
   }
-  function layoutFocusNoOverlap(){
+  function layoutFocusRing(){
     const cw=canvas.width,ch=canvas.height,cx=cw/2,cy=ch/2;
-    const parent=nodes[0]; parent.x=cx; parent.y=cy;
-    const kids=nodes.slice(1); if(!kids.length) return;
-    const startR=120, ringGap=90, minSep=12, labelPad=8;
-    const needPx = n => Math.max(2*(n.size||7), measure.measureText(n.label||'').width + labelPad)+minSep;
-    let ring=0, used=0, R=startR, TWO_PI=Math.PI*2, start=Math.random()*TWO_PI;
-    const order=kids.slice().sort((a,b)=> needPx(b)-needPx(a));
+    const parent=nodes.find(n=>n.group==='parent'); if(!parent) return;
+    if(!pinned.has(parent.id)){ parent.x=cx; parent.y=cy; }
+    const kids=nodes.filter(n=>n.group==='child'); const TWO_PI=Math.PI*2;
+    const startR=140, ringGap=95, minSep=12;
+    function labelW(n){ return Math.min(220, measure.measureText(n.label||'').width); }
+    let ring=0, used=0, R=startR, start=Math.random()*TWO_PI;
+    const order=kids.slice().sort((a,b)=> (b.size||7)-(a.size||7));
     for(const k of order){
-      let span=needPx(k), ang=span/R;
-      while(used+ang>TWO_PI && ring<100){ ring++; R=startR+ring*ringGap; used=0; ang=span/R; }
-      const t=start+used+ang/2; k.x=cx+R*Math.cos(t); k.y=cy+R*Math.sin(t); used+=ang;
+      let span = Math.max(2*(k.size||7), labelW(k)+minSep); let ang=span/R;
+      while(used+ang>TWO_PI){ ring++; R=startR+ring*ringGap; used=0; ang=span/R; }
+      if(!pinned.has(k.id)){ const t=start+used+ang/2; k.x=parent.x+R*Math.cos(t); k.y=parent.y+R*Math.sin(t); }
+      used+=ang;
     }
-    for(let i=1;i<nodes.length;i++){ const n=nodes[i],dx=n.x-cx,dy=n.y-cy,r=Math.hypot(dx,dy),jit=(Math.random()-0.5)*2.0,t=Math.atan2(dy,dx); n.x=cx+(r+jit)*Math.cos(t); n.y=cy+(r+jit)*Math.sin(t); }
+  }
+  function layoutAnchored(){
+    const cw=canvas.width,ch=canvas.height;
+    const spacing = +spacingInp.value, P = nodes.filter(n=>n.group==='parent').length;
+    const anchors=new Map(), TWO_PI=Math.PI*2, baseR=300, R=baseR*spacing;
+    const parents = nodes.filter(n=>n.group==='parent').sort((a,b)=> b.degree-a.degree);
+    const layoutType = layoutSel.value;
+    if(layoutType==='grid'){
+      const cols=Math.ceil(Math.sqrt(P)), rows=Math.ceil(P/cols), cell=180*spacing;
+      const x0=-(cols-1)*cell/2, y0=-(rows-1)*cell/2;
+      parents.forEach((p,i)=> anchors.set(p.id,{x:x0+(i%cols)*cell,y:y0+Math.floor(i/cols)*cell}) );
+    }else if(layoutType==='radial'){
+      parents.forEach((p,i)=>{ const t=(i/P)*TWO_PI; const norm=P>1?(1-i/(P-1)):1; const ring=R*(0.8+0.6*norm); anchors.set(p.id,{x:ring*Math.cos(t),y:ring*Math.sin(t)}); });
+    }else{
+      parents.forEach((p,i)=>{ const t=(i/P)*TWO_PI; anchors.set(p.id,{x:R*Math.cos(t),y:R*Math.sin(t)}); });
+    }
+    // place parents
+    parents.forEach(p=>{ if(!pinned.has(p.id)){ p.x=cw/2+anchors.get(p.id).x; p.y=ch/2+anchors.get(p.id).y; } });
+    // children gather near their parent anchor with jitter
+    const childrenByParent = d3.group(links, d=>d.source.id);
+    for(const [pid, edges] of childrenByParent){
+      const anchor = anchors.get(pid); if(!anchor) continue;
+      const centerX = cw/2 + anchor.x, centerY = ch/2 + anchor.y;
+      const r0 = 90; let t=0;
+      for(const e of edges){
+        const c = e.target; if (pinned.has(c.id)) continue;
+        const rr = r0 + (Math.random()*45);
+        c.x = centerX + rr*Math.cos(t); c.y = centerY + rr*Math.sin(t);
+        t += (Math.PI*2)/Math.max(8, edges.length);
+      }
+    }
   }
 
   /* ---------- interactions ---------- */
+  function toGraph(sx,sy){ return [(sx-tx)/scale,(sy-ty)/scale]; }
+  function pick(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i],dx=x-n.x,dy=y-n.y,r=(n.size+6); if(dx*dx+dy*dy<=r*r) return n; } return null; }
+  function showTip(n,sx,sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if(n.degree!=null) lines.push('Degree: '+n.degree); if(n.jur) lines.push('Jurisdiction: '+n.jur); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
+  function hideTip(){ tip.style.display='none'; }
+
   canvas.addEventListener('wheel', e=>{
     const m=e.deltaY>0?0.9:1.1, before=toGraph(e.offsetX,e.offsetY); scale*=m; const after=toGraph(e.offsetX,e.offsetY);
     tx+=(after[0]-before[0])*scale; ty+=(after[1]-before[1])*scale; e.preventDefault();
   },{passive:false});
+
   canvas.addEventListener('mousedown', e=>{
     const [gx,gy]=toGraph(e.offsetX,e.offsetY); const hit=pick(gx,gy);
     if(hit){ dragging=hit; dragOffset=[gx-hit.x, gy-hit.y]; showTip(hit,e.offsetX,e.offsetY);
-      if(mode==='overview' && hit.group==='parent'){ buildFocus(hit.label); mode='focus'; fitScreen(); document.getElementById('parent-select').value=hit.label; }
+      if(mode==='overview' && hit.group==='parent'){ selParent.value=hit.label; buildFocus(); mode='focus'; fitScreen(); }
     } else { panning=true; panStart=[e.offsetX,e.offsetY]; panOrig=[tx,ty]; hideTip(); }
   });
   window.addEventListener('mousemove', e=>{
-    if(dragging){ const [gx,gy]=toGraph(e.offsetX,e.offsetY); dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; showTip(dragging,e.offsetX,e.offsetY); }
+    if(dragging){ const [gx,gy]=toGraph(e.offsetX,e.offsetY); if(!pinned.has(dragging.id)){ dragging.x=gx-dragOffset[0]; dragging.y=gy-dragOffset[1]; } showTip(dragging,e.offsetX,e.offsetY); }
     else if(panning){ tx=panOrig[0]+(e.offsetX-panStart[0]); ty=panOrig[1]+(e.offsetY-panStart[1]); }
+    else { const [gx,gy]=toGraph(e.offsetX,e.offsetY); hover = pick(gx,gy); if(!hover) hideTip(); else showTip(hover,e.offsetX,e.offsetY); }
   });
   window.addEventListener('mouseup', ()=>{ dragging=null; panning=false; });
+  canvas.addEventListener('dblclick', e=>{
+    const [gx,gy]=toGraph(e.offsetX,e.offsetY); const hit=pick(gx,gy); if(!hit) return;
+    if(pinned.has(hit.id)) pinned.delete(hit.id); else pinned.add(hit.id);
+  });
 
   document.getElementById('fit').addEventListener('click', fitScreen);
-  document.getElementById('mode-overview').addEventListener('click', ()=>{ buildOverview(); mode='overview'; fitScreen(); });
-  document.getElementById('mode-focus').addEventListener('click', ()=>{ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); mode='focus'; fitScreen(); }});
-  document.getElementById('mode-network').addEventListener('click', ()=>{
-    const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value;
-    buildNetwork(n,s,t); mode='network'; fitScreen();
-  });
-  document.getElementById('rerun').addEventListener('click', ()=>{
-    if(!window.__DATA) return;
-    if(mode==='network'){ const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
-    else if(mode==='focus'){ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); fitScreen(); } }
-    else { buildOverview(); fitScreen(); }
-  });
-  ['net-count','net-spacing','net-layout'].forEach(id=>{
-    document.getElementById(id).addEventListener('change', ()=>{
-      if(mode==='network'){ const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
-    });
-  });
-  // Recompute sizes live when slider moves
-  document.getElementById('parent-size').addEventListener('input', ()=>{
-    if(!window.__DATA) return;
-    if(mode==='overview'){ buildOverview(); fitScreen(); }
-    else if(mode==='focus'){ const v=document.getElementById('parent-select').value; if(v){ buildFocus(v); fitScreen(); } }
-    else { const n=+document.getElementById('net-count').value, s=+document.getElementById('net-spacing').value, t=document.getElementById('net-layout').value; buildNetwork(n,s,t); fitScreen(); }
+  document.getElementById('mode-overview').addEventListener('click', ()=>{ mode='overview'; buildOverview(); fitScreen(); });
+  document.getElementById('mode-focus').addEventListener('click', ()=>{ mode='focus'; buildFocus(); fitScreen(); });
+  document.getElementById('mode-network').addEventListener('click', ()=>{ mode='network'; buildNetwork(); fitScreen(); });
+  document.getElementById('rerun').addEventListener('click', ()=>{ if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(); });
+
+  [selParent, countTop, layoutSel, spacingInp, parentMax, minDegInp, maxLabels, colorBySel].forEach(el=>{
+    el.addEventListener('input', ()=>{ if(!window.CURRENT) return; if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(false); });
   });
 
-  function toGraph(sx,sy){ return [(sx-tx)/scale,(sy-ty)/scale]; }
-  function pick(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i],dx=x-n.x,dy=y-n.y,r=(n.size+6); if(dx*dx+dy*dy<=r*r) return n; } return null; }
-  function showTip(n,sx,sy){ const lines=[(n.group==='parent'?'Parent':'Child')+': '+n.label]; if(n.cik) lines.push('CIK: '+n.cik); if(n.count!=null) lines.push('Links: '+n.count); tip.innerHTML=lines.join('<br/>'); tip.style.left=(sx+12)+'px'; tip.style.top=(sy-10)+'px'; tip.style.display='block'; }
-  function hideTip(){ tip.style.display='none'; }
-
-  function draw(){
-    const bg=getComputedStyle(document.documentElement).getPropertyValue('--card').trim()||'#FFF';
-    const parentCol=getComputedStyle(document.documentElement).getPropertyValue('--parent').trim()||'#D04A02';
-    const childCol=getComputedStyle(document.documentElement).getPropertyValue('--child').trim()||'#00A3A1';
-    const linkCol=getComputedStyle(document.documentElement).getPropertyValue('--link').trim()||'#C8C4BE';
-
-    ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
-
-    if((mode==='focus'||mode==='network')&&links.length){
-      ctx.lineWidth=Math.max(0.8/scale,0.2/scale); ctx.strokeStyle=linkCol; ctx.beginPath();
-      for(const e of links){ const s=e.source,t=e.target; if(!s||!t) continue; ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); }
-      ctx.stroke();
-    }
-    for(const n of nodes){
-      const r=Math.max(n.size||7, 2/scale);
-      ctx.beginPath(); ctx.fillStyle=(n.group==='parent'?parentCol:childCol); ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
-    }
-    ctx.restore();
-
-    // label culling
-    const showLabels=(mode==='focus')?(scale>0.5||nodes.length<180):(scale>1.0||nodes.length<90);
-    if(showLabels){
-      measure.font=baseFont; const fontH=14;
-      const cands=nodes.map(n=>{
-        const r_world=Math.max(n.size||7,2/scale);
-        const y_world=n.y+r_world+4;
-        const w_world=measure.measureText(n.label||'').width;
-        return {n, sx:n.x*scale+tx, sy:y_world*scale+ty, w:w_world*scale, h:fontH*scale};
-      }).sort((a,b)=>{
-        const gp=(a.n.group==='parent')-(b.n.group==='parent'); if(gp) return -gp;
-        const d=(b.n.count||0)-(a.n.count||0); if(d) return d;
-        return a.w-b.w;
-      });
-      const placed=[];
-      ctx.save(); ctx.font=baseFont; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
-      for(const L of cands){
-        const x0=L.sx-L.w/2, y0=L.sy, x1=x0+L.w, y1=y0+L.h;
-        let overlap=false; for(const P of placed){ if(x0<P.x1+2&&x1>P.x0-2&&y0<P.y1+2&&y1>P.y0-2){overlap=true;break;} }
-        if(!overlap){ placed.push({x0,y0,x1,y1}); ctx.fillText(L.n.label, L.sx, L.sy); }
-      }
-      ctx.restore();
-    }
-    requestAnimationFrame(draw);
+  [yearFrom,yearTo].forEach(el=>{
+    el.addEventListener('input', ()=>{ enforceRange(); updateRangeLabel(); if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); fitScreen(false); });
+  });
+  function enforceRange(){
+    if (+yearFrom.value > +yearTo.value) yearFrom.value = yearTo.value;
   }
-  requestAnimationFrame(draw);
+
+  // Play animation
+  document.getElementById('play').addEventListener('click', ()=>{
+    if(animation){ clearInterval(animation); animation=null; document.getElementById('play').textContent='Play'; return; }
+    document.getElementById('play').textContent='Pause';
+    const min=+yearFrom.min, max=+yearTo.max;
+    yearFrom.value=min; yearTo.value=min; updateRangeLabel();
+    animation=setInterval(()=>{
+      let y=+yearTo.value + 1;
+      if (y>max){ clearInterval(animation); animation=null; document.getElementById('play').textContent='Play'; return; }
+      yearTo.value=y; if(mode==='overview') buildOverview(); else if(mode==='focus') buildFocus(); else buildNetwork(); }, 400);
+  });
+
+  // export PNG
+  document.getElementById('export').addEventListener('click', ()=>{
+    const url = canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='relationship-map.png'; a.click();
+  });
+
+  window.__graph_reload = () => { mode='overview'; pinned.clear(); buildOverview(); fitScreen(); requestAnimationFrame(draw); };
 
   function fitScreen(){
     if(!nodes.length) return;
@@ -522,28 +614,81 @@ document.getElementById('collapse').addEventListener('click', ()=>{ for (const c
     const s=0.9*Math.min(cw/w,ch/h); scale=isFinite(s)?Math.min(Math.max(s,0.1),5):1;
     tx=cx-((minx+maxx)/2)*scale; ty=cy-((miny+maxy)/2)*scale;
   }
+
+  /* ---------- draw ---------- */
+  function draw(){
+    const bg=getCss('--card','#FFF'); ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.translate(tx,ty); ctx.scale(scale,scale);
+
+    // neighbor fade
+    let neighborIds=null;
+    if(hover){
+      neighborIds=new Set([hover.id]);
+      for(const e of links){ const s=e.source.id, t=e.target.id; if(s===hover.id) neighborIds.add(t); if(t===hover.id) neighborIds.add(s); }
+    }
+
+    // curved edges (quadratic), width by weight
+    const drawLinks=(filter, alpha)=>{
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = linkCol();
+      for(const e of links){
+        if(filter && !filter(e)) continue;
+        const s=e.source, t=e.target;
+        const w = Math.max(0.6, Math.min(3.0, 0.6 + e.w*0.6));
+        ctx.lineWidth = Math.max(w/scale, 0.2);
+        const mx=(s.x*2 + t.x)/3, my=(s.y*2 + t.y)/3; // control towards parent
+        ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.quadraticCurveTo(mx,my,t.x,t.y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    };
+    if(hover){ drawLinks(null, 0.08); drawLinks(e=> (e.source.id===hover.id || e.target.id===hover.id), 1); }
+    else drawLinks(null, 1);
+
+    // nodes
+    for(const n of nodes){
+      const r=Math.max(n.size||7, 2/scale);
+      const dim = neighborIds ? !neighborIds.has(n.id) : false;
+      ctx.globalAlpha = dim ? 0.25 : 1;
+      ctx.beginPath(); ctx.fillStyle = n.color || (n.group==='parent'?parentCol():defaultChildCol());
+      ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
+
+      // halo for parents (by degree)
+      if(n.group==='parent' && (n.degree||0)>0){
+        ctx.globalAlpha = dim ? 0.15 : 0.25;
+        ctx.beginPath(); ctx.strokeStyle = n.color; ctx.lineWidth = Math.max( (1 + n.degree*0.1)/scale, 0.5/scale );
+        ctx.arc(n.x,n.y,r+4/scale,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    // label culling by slider (top-K by importance)
+    const K = +maxLabels.value;
+    if(K>0){
+      const ranked = nodes.slice().sort((a,b)=>{
+        const gp = (a.group==='parent') - (b.group==='parent'); if(gp) return -gp;
+        const d = (b.degree||0)-(a.degree||0); if(d) return d; return a.label.localeCompare(b.label);
+      }).slice(0,K);
+      // anti-overlap packing
+      const placed=[]; ctx.save(); ctx.font=baseFont; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#333';
+      for(const n of ranked){
+        const r=Math.max(n.size||7,2/scale), sx=n.x*scale+tx, sy=(n.y+r+4)*scale+ty, w=measure.measureText(n.label||'').width*scale, h=14*scale;
+        const x0=sx-w/2,y0=sy,x1=x0+w,y1=y0+h; let ok=true;
+        for(const b of placed){ if(x0<b.x1+2 && x1>b.x0-2 && y0<b.y1+2 && y1>b.y0-2){ ok=false; break; } }
+        if(ok){ placed.push({x0,y0,x1,y1}); ctx.fillText(n.label,sx,sy); }
+      }
+      ctx.restore();
+    }
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
 })();
 </script>
-
-<!-- Last push time (GitHub API) -->
 <script>
-const GH_OWNER = ""; const GH_REPO  = "";
-(function(){
-  const el=document.getElementById('gh-push'); if(!el) return;
-  let owner=GH_OWNER, repo=GH_REPO;
-  if(!owner||!repo){
-    if(location.hostname.endsWith('.github.io')){
-      owner=owner||location.hostname.split('.github.io')[0];
-      const parts=location.pathname.split('/').filter(Boolean);
-      repo=repo||(parts[0]||`${owner}.github.io`);
-    }
-  }
-  if(!owner||!repo){ el.textContent='unavailable'; return; }
-  fetch(`https://api.github.com/repos/${owner}/${repo}`)
-    .then(r=>r.ok?r.json():Promise.reject())
-    .then(meta=>{ el.textContent=new Date(meta.pushed_at).toLocaleString(); })
-    .catch(()=>{ el.textContent='unavailable'; });
-})();
+/* utility exported earlier */
+function updateRangeLabel(){ const from=document.getElementById('year-from'), to=document.getElementById('year-to'), out=document.getElementById('yr-range'); if(from&&to&&out) out.textContent=`${from.value} – ${to.value}`; }
 </script>
 </body>
 </html>
